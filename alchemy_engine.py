@@ -1,31 +1,29 @@
-import google.generativeai as genai
+from openai import OpenAI
 import os
 from database import db
 
-# API Key setup
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Groq ka configuration
+client = OpenAI(
+    api_key=os.getenv("GROQ_API_KEY"),
+    base_url="https://api.groq.com/openai/v1"
+)
 
 async def get_ai_recipe(item1, item2):
-    # Prompting for standard format
-    prompt = f"Combine {item1} and {item2}. Give me the result in format: [Name] | [Emoji]. If illogical, return: Nothing | ❌"
+    prompt = f"Combine {item1} and {item2}. Result format: [Name] | [Emoji]. If illogical: Nothing | ❌"
     
-    response = model.generate_content(prompt)
-    result_text = response.text.strip()
+    response = client.chat.completions.create(
+        model="llama3-8b-8192", # Groq ka sabse fast model
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
     
-    # Clean output
+    result_text = response.choices[0].message.content.strip()
     try:
         name, emoji = result_text.split('|')
-        name = name.strip()
-        emoji = emoji.strip()
+        data = {"name": name.strip(), "emoji": emoji.strip()}
     except:
-        name, emoji = "Nothing", "❌"
+        data = {"name": "Nothing", "emoji": "❌"}
         
-    # Save to MongoDB for future caching
-    await db.recipes.insert_one({
-        "elements": sorted([item1, item2]),
-        "result": name,
-        "emoji": emoji
-    })
-    
-    return {"name": name, "emoji": emoji}
+    # MongoDB mein cache save karo
+    await db.recipes.insert_one({"elements": sorted([item1, item2]), **data})
+    return data
