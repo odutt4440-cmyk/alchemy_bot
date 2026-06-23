@@ -10,6 +10,7 @@ if not mongo_uri:
     raise ValueError("❌ MONGO_URI is not set in the .env file!")
 
 client = AsyncIOMotorClient(mongo_uri)
+db = client.infinite_craft
 
 
 # --- Naya: Recipe aur Items lookup function ---
