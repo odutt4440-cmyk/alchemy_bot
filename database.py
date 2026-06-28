@@ -12,10 +12,14 @@ if not MONGO_URI:
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.infinite_craft
 
+# SQLite connection cache
+_sqlite_conn = None
+
 def _download_sqlite_db():
-    """Download DB from GitHub Release if not exists"""
+    """Download DB from GitHub Release if not exists - only once"""
+    global _sqlite_conn
+    
     if os.path.exists(DB_PATH):
-        print(f"✅ DB already exists ({os.path.getsize(DB_PATH)/1024/1024:.0f} MB)")
         return
     
     print("📥 Downloading game database from Release...")
@@ -24,7 +28,6 @@ def _download_sqlite_db():
     
     if resp.status_code != 200:
         print(f"❌ Download failed: HTTP {resp.status_code}")
-        print(f"   URL: {RELEASE_URL}")
         return
     
     total_size = int(resp.headers.get('content-length', 0))
@@ -60,11 +63,15 @@ def _download_sqlite_db():
         print(f"⚠️ DB verification error: {e}")
 
 def _get_sqlite_conn():
-    """Get SQLite connection with proper row factory"""
+    """Get SQLite connection - cached for performance"""
+    global _sqlite_conn
     _download_sqlite_db()
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    
+    if _sqlite_conn is None:
+        _sqlite_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _sqlite_conn.row_factory = sqlite3.Row
+    
+    return _sqlite_conn
 
 # ===== GAME DATA LOOKUP (SQLite) =====
 async def get_recipe(item1_name, item2_name):
@@ -86,8 +93,6 @@ async def get_recipe(item1_name, item2_name):
             """, (item2_name, item1_name))
             row = c.fetchone()
         
-        conn.close()
-        
         if row:
             return {"result": f"{row[0]} {row[1]}", "emoji": row[1]}
         
@@ -97,13 +102,11 @@ async def get_recipe(item1_name, item2_name):
         return None
 
 async def get_item_name(item_name):
-    """Return the item name with proper case from database"""
     try:
         conn = _get_sqlite_conn()
         c = conn.cursor()
         c.execute("SELECT name, emoji FROM elements WHERE LOWER(name) = LOWER(?)", (item_name,))
         row = c.fetchone()
-        conn.close()
         
         if row:
             return f"{row[0]} {row[1]}"
