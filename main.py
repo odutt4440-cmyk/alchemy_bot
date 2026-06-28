@@ -33,39 +33,34 @@ async def set_commands():
 
 @client.on(events.ChatAction)
 async def welcome_handler(event):
-    """Handle when bot is added to a group"""
+    """Handle when bot is added to a group - fixed double welcome"""
     try:
-        file_path = START_IMAGE
-        has_photo = os.path.exists(file_path)
-        
-        if event.user_added or event.user_join:
+        # Sirf user_added event handle karo (user_join exist nahi karta)
+        if event.user_added:
+            me = await client.get_me()
+            bot_added = False
+            
             for user in event.users:
-                if hasattr(user, 'id') and user.id == (await client.get_me()).id:
-                    chat_id = event.chat_id
-                    
-                    if chat_id == OFFICIAL_GC_ID:
-                        if has_photo:
-                            await client.send_file(chat_id, file_path, caption=OFFICIAL_WELCOME_MSG)
-                        else:
-                            await event.reply(OFFICIAL_WELCOME_MSG)
-                    else:
-                        if has_photo:
-                            await client.send_file(chat_id, file_path, caption=OTHER_GROUP_MSG)
-                        else:
-                            await event.reply(OTHER_GROUP_MSG)
-                    
-                    return
-        
-        if event.user_join:
-            for user in event.users:
-                if hasattr(user, 'id') and user.id == (await client.get_me()).id:
-                    continue
+                if hasattr(user, 'id') and user.id == me.id:
+                    bot_added = True
+                    break
+            
+            if bot_added:
+                # Bot add hua hai
+                chat_id = event.chat_id
+                file_path = START_IMAGE
+                has_photo = os.path.exists(file_path)
                 
-                if event.chat_id == OFFICIAL_GC_ID:
+                if chat_id == OFFICIAL_GC_ID:
                     if has_photo:
-                        await client.send_file(event.chat_id, file_path, caption=OFFICIAL_WELCOME_MSG)
+                        await client.send_file(chat_id, file_path, caption=OFFICIAL_WELCOME_MSG)
                     else:
                         await event.reply(OFFICIAL_WELCOME_MSG)
+                else:
+                    if has_photo:
+                        await client.send_file(chat_id, file_path, caption=OTHER_GROUP_MSG)
+                    else:
+                        await event.reply(OTHER_GROUP_MSG)
     
     except Exception as e:
         print(f"Welcome handler error: {e}")
@@ -78,6 +73,18 @@ async def start_handler(event):
         else:
             await event.reply(START_MSG_OTHER_GROUP)
         return
+    
+    # ✅ DM mein /start — user ko initialize karo agar pehli baar hai
+    user = await db.users.find_one({"user_id": event.sender_id})
+    if not user:
+        await db.users.insert_one({
+            "user_id": event.sender_id,
+            "points": 0,
+            "crafted_count": 0,
+            "last_craft_time": None,
+            "inventory": INITIAL_ITEMS
+        })
+        print(f"✅ New user initialized: {event.sender_id}")
     
     # DM mein — photo + buttons
     buttons = [
