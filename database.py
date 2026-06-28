@@ -131,6 +131,7 @@ async def can_craft(user_id):
     return (now - last_time).total_seconds() >= COOLDOWN_SECONDS
 
 async def add_craft_point(user_id, new_item_name=None, points=None):
+    # Points ki value config se hi uthegi
     if points is None:
         points = CRAFT_POINTS
     
