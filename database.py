@@ -16,49 +16,39 @@ if not mongo_uri:
 mongo_client = AsyncIOMotorClient(mongo_uri)
 db = mongo_client.infinite_craft
 
-# ===== SQLITE (Game data - downloaded from GitHub) =====
+# ===== SQLITE (Game data - downloaded from GitHub Release) =====
 SQLITE_DB_PATH = "infinite_craft.db"
-BASE_URL = "https://github.com/odutt4440-cmyk/infinite-craft-scraper/raw/main"
+# ✅ Latest release se DB download karega
+RELEASE_URL = "https://github.com/odutt4440-cmyk/alchemy_bot/releases/latest/download/infinite_craft.db.gz"
 
 def _download_sqlite_db():
-    """Download and combine chunks from GitHub if DB doesn't exist"""
+    """Download DB from GitHub Release if not exists"""
     if os.path.exists(SQLITE_DB_PATH):
         print(f"✅ DB already exists ({os.path.getsize(SQLITE_DB_PATH)/1024/1024:.0f} MB)")
         return
     
-    print("📥 Downloading game database chunks...")
+    print("📥 Downloading game database from Release...")
     
-    # Pehle check karo kitne chunks hain
-    # part_aa, part_ab, part_ac, part_ad, part_ae, part_af... etc
-    chunk_num = 0
-    chunk_files = []
-    while True:
-        # Convert number to letters: 0->aa, 1->ab, 2->ac, ... 26->ba, 27->bb, ...
-        first = chunk_num // 26
-        second = chunk_num % 26
-        filename = f"part_{chr(97 + first)}{chr(97 + second)}"
-        
-        # Check if chunk exists on GitHub (HEAD request)
-        url = f"{BASE_URL}/{filename}"
-        resp = requests.head(url)
-        if resp.status_code != 200:
-            break
-        
-        chunk_files.append((filename, url))
-        chunk_num += 1
+    resp = requests.get(RELEASE_URL, stream=True)
     
-    print(f"   Found {len(chunk_files)} chunks")
-    
-    if not chunk_files:
-        print("❌ No chunks found on GitHub!")
+    if resp.status_code != 200:
+        print(f"❌ Download failed: HTTP {resp.status_code}")
+        print(f"   URL: {RELEASE_URL}")
         return
     
-    # Download all chunks and combine
-    with open("infinite_craft.db.gz", "wb") as out:
-        for fname, url in chunk_files:
-            resp = requests.get(url)
-            out.write(resp.content)
-            print(f"   ✅ {fname} downloaded ({len(resp.content)/1024/1024:.1f} MB)")
+    # Download compressed file
+    total_size = int(resp.headers.get('content-length', 0))
+    downloaded = 0
+    
+    with open("infinite_craft.db.gz", "wb") as f:
+        for chunk in resp.iter_content(chunk_size=8192):
+            f.write(chunk)
+            downloaded += len(chunk)
+            if total_size > 0:
+                pct = (downloaded / total_size) * 100
+                print(f"   ⏳ Downloading... {pct:.0f}%", end="\r")
+    
+    print(f"\n   ✅ Downloaded ({downloaded/1024/1024:.0f} MB)")
     
     # Decompress
     print("📦 Decompressing...")
@@ -69,18 +59,17 @@ def _download_sqlite_db():
     os.remove("infinite_craft.db.gz")
     
     # Verify
-    conn = sqlite3.connect(SQLITE_DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM recipes")
-    r_count = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM elements")
-    e_count = c.fetchone()[0]
-    conn.close()
-    
-    print(f"✅ Game DB ready! {e_count} elements, {r_count} recipes loaded")
-    
-    # Pehle verify step ka output check karo — actual table name kya hai
-    # Agar table 'recipes' nahi hai toh yaha fix kar lenge
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM recipes")
+        r_count = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM elements")
+        e_count = c.fetchone()[0]
+        conn.close()
+        print(f"✅ Game DB ready! {e_count} elements, {r_count} recipes")
+    except Exception as e:
+        print(f"⚠️ DB verification error: {e}")
 
 def _get_sqlite_conn():
     """Get SQLite connection with proper row factory"""
@@ -95,6 +84,7 @@ async def get_recipe(item1_name, item2_name):
         conn = _get_sqlite_conn()
         c = conn.cursor()
         
+        # Direct order
         c.execute("""
             SELECT result, result_emoji FROM recipes 
             WHERE LOWER(first) = LOWER(?) AND LOWER(second) = LOWER(?)
@@ -118,16 +108,6 @@ async def get_recipe(item1_name, item2_name):
         return None
     except Exception as e:
         print(f"❌ get_recipe error: {e}")
-        # Agar table nahi mila toh schema print karo debug ke liye
-        try:
-            conn = _get_sqlite_conn()
-            c = conn.cursor()
-            c.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = c.fetchall()
-            print(f"   Available tables: {[t[0] for t in tables]}")
-            conn.close()
-        except:
-            pass
         return None
 
 async def get_item_name(item_name):
@@ -145,7 +125,7 @@ async def get_item_name(item_name):
     except:
         return item_name
 
-# ===== MONGO (User data - existing code) =====
+# ===== MONGO (User data) =====
 async def can_craft(user_id):
     user = await db.users.find_one({"user_id": user_id})
     if not user: return True
@@ -184,8 +164,7 @@ async def add_craft_point(user_id, new_item_name=None, new_item_emoji=None, poin
         if "inventory" not in user or not user["inventory"]:
             update_query.setdefault("$set", {})["inventory"] = initial_items
         
-        if new_item_name and new_item_emoji:
-            formatted_item = new_item_name  # Already has emoji: "Steam 💨"
-            update_query.setdefault("$addToSet", {})["inventory"] = formatted_item
+        if new_item_name:
+            update_query.setdefault("$addToSet", {})["inventory"] = new_item_name
             
         await db.users.update_one({"user_id": user_id}, update_query)
