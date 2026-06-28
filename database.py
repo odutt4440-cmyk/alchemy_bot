@@ -16,26 +16,30 @@ db = mongo_client.infinite_craft
 _sqlite_conn = None
 
 def _download_sqlite_db():
+    """Download DB from GitHub Release if not exists - only once"""
     global _sqlite_conn
+    
     if os.path.exists(DB_PATH):
         return
     
-    print("📥 Downloading game database...")
+    print("📥 Downloading game database from Release...")
+    
     resp = requests.get(RELEASE_URL, stream=True)
+    
     if resp.status_code != 200:
+        print(f"❌ Download failed: HTTP {resp.status_code}")
         return
     
     total_size = int(resp.headers.get('content-length', 0))
     downloaded = 0
+    
     with open("infinite_craft.db.gz", "wb") as f:
         for chunk in resp.iter_content(chunk_size=8192):
             f.write(chunk)
             downloaded += len(chunk)
             if total_size > 0:
-                # Sirf har 5% par print karega, spam nahi hoga
-                pct = int((downloaded / total_size) * 100)
-                if pct % 5 == 0:
-                    print(f"⏳ Downloading... {pct}%", end="\r")
+                pct = (downloaded / total_size) * 100
+                print(f"   ⏳ Downloading... {pct:.0f}%", end="\r")
     
     print(f"\n   ✅ Downloaded ({downloaded/1024/1024:.0f} MB)")
     
@@ -59,13 +63,12 @@ def _download_sqlite_db():
         print(f"⚠️ DB verification error: {e}")
 
 def _get_sqlite_conn():
+    """Get SQLite connection - cached for performance"""
     global _sqlite_conn
     _download_sqlite_db()
     
     if _sqlite_conn is None:
-        # uri=True aur mode=ro use karne se RAM bachegi aur performance sahi rahegi
-        db_uri = f"file:{DB_PATH}?mode=ro"
-        _sqlite_conn = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
+        _sqlite_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         _sqlite_conn.row_factory = sqlite3.Row
     
     return _sqlite_conn
