@@ -19,8 +19,9 @@ HELP_URL = "https://t.me/help_link"
 GC_URL = "https://t.me/your_group"
 CHANNEL_URL = "https://t.me/your_channel"
 
-# ===== POINTS SYSTEM =====
-CRAFT_POINTS = 2              # Har craft mein kitne points milein
+# ===== POINTS & REWARDS SYSTEM =====
+CRAFT_POINTS = 10             # Points for leaderboard
+CRAFT_COINS = 2               # Coins for rewards
 COOLDOWN_SECONDS = 5          # Craft ke beech ka wait time
 INITIAL_ITEMS = ["Fire 🔥", "Water 💦", "Earth 🌏", "Air 💨"]
 
