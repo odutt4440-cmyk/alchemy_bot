@@ -11,15 +11,15 @@ MONGO_URI = os.getenv("MONGO_URI")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "your_bot_username")  # @ ke bina
 
 # ===== GROUP IDs =====
-OFFICIAL_GC_ID = -1001234567890  # ← YAHI DAAL APNA OFFICIAL GROUP ID
+OFFICIAL_GC_ID = -1003964320147  # ← YAHI DAAL APNA OFFICIAL GROUP ID
 
 # ===== BUTTON URLS =====
-DEV_URL = "https://t.me/your_username"
+DEV_URL = "https://t.me/detective_invisible1"
 HELP_URL = "https://t.me/help_link"
-GC_URL = "https://t.me/your_group"
-CHANNEL_URL = "https://t.me/your_channel"
-LOG_GC_ID=-100XXXXXXXXXXX
-OWNER_ID=976545678
+GC_URL = "https://t.me/dfghjkjhgfdfghjkghkj"
+CHANNEL_URL = "https://t.me/sdfghjkjhgfdssdfg"
+LOG_GC_ID = -1004235229716
+OWNER_ID = 6273928843
 # ===== POINTS & REWARDS SYSTEM =====
 CRAFT_POINTS = 10             # Points for leaderboard
 CRAFT_COINS = 2               # Coins for rewards
