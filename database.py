@@ -130,11 +130,10 @@ async def can_craft(user_id):
     
     return (now - last_time).total_seconds() >= COOLDOWN_SECONDS
 
-async def add_craft_point(user_id, new_item_name=None, points=None):
-    # Points ki value config se hi uthegi
-    if points is None:
-        points = CRAFT_POINTS
-    
+# add_craft_point ko update karo (coins support ke liye)
+async def add_craft_point(user_id, new_item_name=None, points=None, coins=None):
+    points = points if points is not None else CRAFT_POINTS
+    coins = coins if coins is not None else CRAFT_COINS # config se import karna
     now = datetime.datetime.now(datetime.timezone.utc)
     
     user = await db.users.find_one({"user_id": user_id})
@@ -143,20 +142,25 @@ async def add_craft_point(user_id, new_item_name=None, points=None):
         await db.users.insert_one({
             "user_id": user_id,
             "points": points,
+            "coins": coins,
             "crafted_count": 1,
             "last_craft_time": now,
-            "inventory": INITIAL_ITEMS
+            "inventory": INITIAL_ITEMS,
+            "is_banned": False,
+            "is_admin": False
         })
     else:
         update_query = {
-            "$inc": {"points": points, "crafted_count": 1},
+            "$inc": {"points": points, "coins": coins, "crafted_count": 1},
             "$set": {"last_craft_time": now}
         }
-        
         if "inventory" not in user or not user["inventory"]:
             update_query.setdefault("$set", {})["inventory"] = INITIAL_ITEMS
-        
         if new_item_name:
             update_query.setdefault("$addToSet", {})["inventory"] = new_item_name
-            
         await db.users.update_one({"user_id": user_id}, update_query)
+
+# Admin check function
+async def is_admin(user_id):
+    user = await db.users.find_one({"user_id": user_id})
+    return user.get("is_admin", False) if user else False
