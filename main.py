@@ -232,6 +232,8 @@ async def craft_handler(event):
 
     recipe = await get_recipe(item1_input, item2_input)
     
+    # ... purana code wahi rahega ...
+
     if recipe:
         result_name_emoji = recipe['result']
         
@@ -239,8 +241,14 @@ async def craft_handler(event):
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
             return
             
-        await add_craft_point(event.sender_id, new_item_name=result_name_emoji, points=CRAFT_POINTS)
-        await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS}")
+        
+        await add_craft_point(
+            event.sender_id, 
+            new_item_name=result_name_emoji, 
+            points=CRAFT_POINTS, 
+            coins=CRAFT_COINS
+        )
+        await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS} | Coins: +{CRAFT_COINS}")
     else:
         await event.reply(NOTHING_MSG)
 
