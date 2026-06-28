@@ -19,7 +19,7 @@ HELP_URL = "https://t.me/help_link"
 GC_URL = "https://t.me/your_group"
 CHANNEL_URL = "https://t.me/your_channel"
 LOG_GC_ID=-100XXXXXXXXXXX
-
+OWNER_ID=976545678
 # ===== POINTS & REWARDS SYSTEM =====
 CRAFT_POINTS = 10             # Points for leaderboard
 CRAFT_COINS = 2               # Coins for rewards
