@@ -310,6 +310,19 @@ async def main():
     await client.start(bot_token=BOT_TOKEN)
     await set_commands()
     
+    # 📢 Bot Start Notification
+    try:
+        from config import LOG_GC_ID
+        await client.send_message(
+            LOG_GC_ID, 
+            "✅ **Bot has been started successfully!**\n\n"
+            "🚀 Status: `Online`\n"
+            "⚙️ Mode: `Production`\n"
+            "📅 Time: `Online Now`"
+        )
+    except Exception as e:
+        print(f"Could not send start message: {e}")
+    
     client.add_event_handler(sudohelp)
     client.add_event_handler(addsudo)
     client.add_event_handler(power_callback)
