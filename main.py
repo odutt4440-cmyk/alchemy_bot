@@ -18,7 +18,7 @@ from config import (
 # Admin imports
 from admin import (
     MAINTENANCE, sudohelp, addsudo, power_callback, coins_cmd, 
-    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode
+    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem
 )
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
@@ -196,6 +196,23 @@ async def redeem_callback(event):
         await db.users.update_one({"user_id": event.sender_id}, {"$inc": {"coins": -target['cost']}})
         await event.edit(f"✅ **Redeem Successful!**\nYou claimed: **{target['name']}**.\nAn admin will contact you soon.")
 
+        try:
+            from config import LOG_GC_ID 
+            # Button ko inline rakho
+            
+
+            await event.client.send_message(
+                LOG_GC_ID, 
+                f"🎁 **New Redemption Request**\n\n"
+                f"👤 User ID: `{event.sender_id}`\n"
+                f"💎 Item: {target['name']}\n"
+                f"💰 Coins Spent: {target['cost']}",
+                
+            )
+        except Exception as e:
+            print(f"Error sending log: {e}")
+
+
 @client.on(events.NewMessage(pattern=r'(?i)/inventory'))
 async def inventory_handler(event):
     if await check_maintenance(event): return
@@ -303,6 +320,7 @@ async def main():
     client.add_event_handler(stats)
     client.add_event_handler(info)
     client.add_event_handler(maintenance_mode)
+    client.add_event_handler(give_redeem)
     
     print("Bot is running with Admin & Maintenance support!")
     await client.run_until_disconnected()
