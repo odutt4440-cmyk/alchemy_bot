@@ -4,27 +4,18 @@ import os
 import sqlite3
 import requests
 import gzip
-from dotenv import load_dotenv
+from config import MONGO_URI, DB_PATH, RELEASE_URL, CRAFT_POINTS, COOLDOWN_SECONDS, INITIAL_ITEMS
 
-load_dotenv()
+if not MONGO_URI:
+    raise ValueError("❌ MONGO_URI is not set!")
 
-# ===== MONGO (User data) =====
-mongo_uri = os.getenv("MONGO_URI")
-if not mongo_uri:
-    raise ValueError("❌ MONGO_URI is not set in the .env file!")
-
-mongo_client = AsyncIOMotorClient(mongo_uri)
+mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client.infinite_craft
-
-# ===== SQLITE (Game data - downloaded from GitHub Release) =====
-SQLITE_DB_PATH = "infinite_craft.db"
-# ✅ Latest release se DB download karega
-RELEASE_URL = "https://github.com/odutt4440-cmyk/alchemy_bot/releases/latest/download/infinite_craft.db.gz"
 
 def _download_sqlite_db():
     """Download DB from GitHub Release if not exists"""
-    if os.path.exists(SQLITE_DB_PATH):
-        print(f"✅ DB already exists ({os.path.getsize(SQLITE_DB_PATH)/1024/1024:.0f} MB)")
+    if os.path.exists(DB_PATH):
+        print(f"✅ DB already exists ({os.path.getsize(DB_PATH)/1024/1024:.0f} MB)")
         return
     
     print("📥 Downloading game database from Release...")
@@ -36,7 +27,6 @@ def _download_sqlite_db():
         print(f"   URL: {RELEASE_URL}")
         return
     
-    # Download compressed file
     total_size = int(resp.headers.get('content-length', 0))
     downloaded = 0
     
@@ -50,17 +40,15 @@ def _download_sqlite_db():
     
     print(f"\n   ✅ Downloaded ({downloaded/1024/1024:.0f} MB)")
     
-    # Decompress
     print("📦 Decompressing...")
     with gzip.open("infinite_craft.db.gz", "rb") as f_in:
-        with open(SQLITE_DB_PATH, "wb") as f_out:
+        with open(DB_PATH, "wb") as f_out:
             f_out.write(f_in.read())
     
     os.remove("infinite_craft.db.gz")
     
-    # Verify
     try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT COUNT(*) FROM recipes")
         r_count = c.fetchone()[0]
@@ -74,7 +62,7 @@ def _download_sqlite_db():
 def _get_sqlite_conn():
     """Get SQLite connection with proper row factory"""
     _download_sqlite_db()
-    conn = sqlite3.connect(SQLITE_DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -84,7 +72,6 @@ async def get_recipe(item1_name, item2_name):
         conn = _get_sqlite_conn()
         c = conn.cursor()
         
-        # Direct order
         c.execute("""
             SELECT result, result_emoji FROM recipes 
             WHERE LOWER(first) = LOWER(?) AND LOWER(second) = LOWER(?)
@@ -93,7 +80,6 @@ async def get_recipe(item1_name, item2_name):
         row = c.fetchone()
         
         if not row:
-            # Reverse order
             c.execute("""
                 SELECT result, result_emoji FROM recipes 
                 WHERE LOWER(first) = LOWER(?) AND LOWER(second) = LOWER(?)
@@ -139,11 +125,13 @@ async def can_craft(user_id):
     else:
         last_time = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
     
-    return (now - last_time).total_seconds() >= 5
+    return (now - last_time).total_seconds() >= COOLDOWN_SECONDS
 
-async def add_craft_point(user_id, new_item_name=None, new_item_emoji=None, points=2):
+async def add_craft_point(user_id, new_item_name=None, points=None):
+    if points is None:
+        points = CRAFT_POINTS
+    
     now = datetime.datetime.now(datetime.timezone.utc)
-    initial_items = ["Fire 🔥", "Water 💦", "Earth 🌏", "Air 💨"]
     
     user = await db.users.find_one({"user_id": user_id})
     
@@ -153,7 +141,7 @@ async def add_craft_point(user_id, new_item_name=None, new_item_emoji=None, poin
             "points": points,
             "crafted_count": 1,
             "last_craft_time": now,
-            "inventory": initial_items
+            "inventory": INITIAL_ITEMS
         })
     else:
         update_query = {
@@ -162,7 +150,7 @@ async def add_craft_point(user_id, new_item_name=None, new_item_emoji=None, poin
         }
         
         if "inventory" not in user or not user["inventory"]:
-            update_query.setdefault("$set", {})["inventory"] = initial_items
+            update_query.setdefault("$set", {})["inventory"] = INITIAL_ITEMS
         
         if new_item_name:
             update_query.setdefault("$addToSet", {})["inventory"] = new_item_name
