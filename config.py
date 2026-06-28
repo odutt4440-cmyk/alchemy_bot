@@ -15,9 +15,9 @@ OFFICIAL_GC_ID = -1003964320147  # ← YAHI DAAL APNA OFFICIAL GROUP ID
 
 # ===== BUTTON URLS =====
 DEV_URL = "https://t.me/detective_invisible1"
-HELP_URL = "https://t.me/help_link"
-GC_URL = "https://t.me/dfghjkjhgfdfghjkghkj"
-CHANNEL_URL = "https://t.me/sdfghjkjhgfdssdfg"
+HELP_URL = "https://t.me/littlealchemyy/5"
+GC_URL = "https://t.me/craftingworlds"
+CHANNEL_URL = "https://t.me/littlealchemyy"
 LOG_GC_ID = -1004235229716
 OWNER_ID = 6273928843
 # ===== POINTS & REWARDS SYSTEM =====
