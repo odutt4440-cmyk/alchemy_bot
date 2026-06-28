@@ -15,8 +15,20 @@ from config import (
     CRAFT_EMPTY_MSG, CRAFT_FORMAT_MSG, SLOW_DOWN_MSG, DM_FIRST_MSG,
     POINTS_GROUP_MSG, INVENTORY_GROUP_MSG, NOTHING_MSG, HELP_MSG
 )
+# Admin imports
+from admin import (
+    MAINTENANCE, sudohelp, addsudo, power_callback, coins_cmd, 
+    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode
+)
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
+
+# Maintenance check helper
+async def check_maintenance(event):
+    if MAINTENANCE.get("status"):
+        await event.reply(f"⚠️ **Maintenance Notice**\n\n{MAINTENANCE.get('reason')}")
+        return True
+    return False
 
 async def set_commands():
     commands = [
@@ -42,7 +54,6 @@ async def welcome_handler(event):
             bot_added = any(user.id == me.id for user in event.users)
             
             if bot_added:
-                # ✅ Log: Bot added to group
                 chat = await event.get_chat()
                 await client.send_message(
                     LOG_GC_ID, 
@@ -51,7 +62,6 @@ async def welcome_handler(event):
                     f"ID: `{event.chat_id}`"
                 )
                 
-                # Existing Welcome Logic
                 file_path = START_IMAGE
                 has_photo = os.path.exists(file_path)
                 msg = OFFICIAL_WELCOME_MSG if event.chat_id == OFFICIAL_GC_ID else OTHER_GROUP_MSG
@@ -65,6 +75,7 @@ async def welcome_handler(event):
 
 @client.on(events.NewMessage(pattern=r'(?i)/start'))
 async def start_handler(event):
+    if await check_maintenance(event): return
     if event.is_group:
         if event.chat_id == OFFICIAL_GC_ID:
             await event.reply(START_MSG_OFFICIAL_GC)
@@ -72,7 +83,6 @@ async def start_handler(event):
             await event.reply(START_MSG_OTHER_GROUP)
         return
     
-    # ✅ DM logic with Tracking
     user = await db.users.find_one({"user_id": event.sender_id})
     if not user:
         await db.users.insert_one({
@@ -83,8 +93,6 @@ async def start_handler(event):
             "last_craft_time": None,
             "inventory": INITIAL_ITEMS
         })
-        
-        # ✅ Log: New User
         sender = await event.get_sender()
         user_name = f"{sender.first_name} {sender.last_name or ''}"
         await client.send_message(
@@ -93,9 +101,7 @@ async def start_handler(event):
             f"Name: {user_name}\n"
             f"ID: `{event.sender_id}`"
         )
-        print(f"✅ New user initialized: {event.sender_id}")
     
-    # DM response with buttons
     buttons = [
         [Button.url("👨‍💻 Developer", DEV_URL)],
         [Button.url("❓ Help", HELP_URL), Button.url("💬 Official GC", GC_URL)],
@@ -112,6 +118,7 @@ async def start_handler(event):
 
 @client.on(events.NewMessage(pattern=r'(?i)/help'))
 async def help_handler(event):
+    if await check_maintenance(event): return
     await event.reply(HELP_MSG)
 
 def get_progress_bar(current, target):
@@ -122,15 +129,14 @@ def get_progress_bar(current, target):
 
 @client.on(events.NewMessage(pattern=r'(?i)/points'))
 async def points_handler(event):
+    if await check_maintenance(event): return
     if event.is_group:
         await event.reply(POINTS_GROUP_MSG)
         return
     
     user = await db.users.find_one({"user_id": event.sender_id})
     points = user.get("points", 0) if user else 0
-    coins = user.get("coins", 0) if user else 0 # Ab coins fetch honge
-    
-    # Progress Bar (Target 1000 for smallest reward)
+    coins = user.get("coins", 0) if user else 0
     bar = get_progress_bar(coins, 1000)
     
     msg = (
@@ -145,26 +151,54 @@ async def points_handler(event):
 
 @client.on(events.NewMessage(pattern=r'(?i)/redeem'))
 async def redeem_handler(event):
-    if event.is_group: return
+    if await check_maintenance(event): return
+    if event.is_group:
+        return await event.reply("⚠️ **Redeem commands work only in DM!**")
+
+    user = await db.users.find_one({"user_id": event.sender_id})
+    coins = user.get("coins", 0) if user else 0
+
+    rewards = {
+        1: {"name": "10rs Playstore", "cost": 1000},
+        2: {"name": "TG ID Promo", "cost": 5000},
+        3: {"name": "TG Premium", "cost": 10000}
+    }
+
+    msg = f"🎁 **Rewards Store**\n\n💰 Your Coins: `{coins}`\n\n"
+    btns = []
+    for i, r in rewards.items():
+        msg += f"{i}. {r['name']} ({r['cost']} coins)\n"
+        btns.append([Button.inline(f"Redeem {r['name']}", f"red_{i}")])
+    
+    btns.append([Button.inline("❌ Close", "red_close")])
+    await event.reply(msg, buttons=btns)
+
+@client.on(events.CallbackQuery(data=lambda d: d.startswith(b'red_')))
+async def redeem_callback(event):
+    data = event.data.decode().split('_')[1]
+    if data == "close":
+        return await event.delete()
+    
+    choice = int(data)
+    rewards = {
+        1: {"name": "10rs Playstore Code", "cost": 1000},
+        2: {"name": "Telegram ID Promotion", "cost": 5000},
+        3: {"name": "Telegram Premium", "cost": 10000}
+    }
     
     user = await db.users.find_one({"user_id": event.sender_id})
     coins = user.get("coins", 0) if user else 0
+    target = rewards[choice]
     
-    rewards_msg = (
-        "🎁 **Rewards Store**\n\n"
-        f"Your Coins: 🪙 {coins}\n\n"
-        "1. 🎫 **10rs Playstore Code** (1000 Coins)\n"
-        "2. 📞 **Telegram ID Promotion** (5000 Coins)\n"
-        "3. 💎 **Telegram Premium** (10000 Coins)\n\n"
-        "**To Redeem:** Type `/redeem [number]`"
-    )
-    
-    args = event.pattern_match.group(1) # Iske liye regex change karni padegi
-    # Ya seedha buttons add kar do, wo zyada professional lagega
-    await event.reply(rewards_msg)
+    if coins < target['cost']:
+        await event.answer(f"❌ Not enough coins! Need {target['cost'] - coins} more.", alert=True)
+    else:
+        await db.users.update_one({"user_id": event.sender_id}, {"$inc": {"coins": -target['cost']}})
+        await event.edit(f"✅ **Redeem Successful!**\nYou claimed: **{target['name']}**.\nAn admin will contact you soon.")
 
 @client.on(events.NewMessage(pattern=r'(?i)/inventory'))
 async def inventory_handler(event):
+    if await check_maintenance(event): return
     if event.is_group:
         await event.reply(INVENTORY_GROUP_MSG)
         return
@@ -187,10 +221,12 @@ async def inventory_handler(event):
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s*$'))
 async def craft_empty_handler(event):
+    if await check_maintenance(event): return
     await event.reply(CRAFT_EMPTY_MSG)
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s+(.*)'))
 async def craft_handler(event):
+    if await check_maintenance(event): return
     text = event.pattern_match.group(2)
     args = text.split()
     
@@ -199,7 +235,6 @@ async def craft_handler(event):
         return
     
     item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
-    
     user = await db.users.find_one({"user_id": event.sender_id})
     
     if not user:
@@ -238,16 +273,12 @@ async def craft_handler(event):
 
     recipe = await get_recipe(item1_input, item2_input)
     
-    # ... purana code wahi rahega ...
-
     if recipe:
         result_name_emoji = recipe['result']
-        
         if any(result_name_emoji.split(' ')[0].lower() in item.lower() for item in inventory):
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
             return
             
-        
         await add_craft_point(
             event.sender_id, 
             new_item_name=result_name_emoji, 
@@ -261,7 +292,19 @@ async def craft_handler(event):
 async def main():
     await client.start(bot_token=BOT_TOKEN)
     await set_commands()
-    print("Bot is running!")
+    
+    client.add_event_handler(sudohelp)
+    client.add_event_handler(addsudo)
+    client.add_event_handler(power_callback)
+    client.add_event_handler(coins_cmd)
+    client.add_event_handler(ban_unban)
+    client.add_event_handler(broadcast_init)
+    client.add_event_handler(bc_callback)
+    client.add_event_handler(stats)
+    client.add_event_handler(info)
+    client.add_event_handler(maintenance_mode)
+    
+    print("Bot is running with Admin & Maintenance support!")
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
