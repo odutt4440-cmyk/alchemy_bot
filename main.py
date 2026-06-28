@@ -1,44 +1,21 @@
 import os
 import asyncio
-from dotenv import load_dotenv
 from telethon import TelegramClient, events, types, Button
 from telethon.tl.functions.bots import SetBotCommandsRequest
 from database import can_craft, add_craft_point, db, get_recipe
-
-load_dotenv()
-
-client = TelegramClient('alchemy_bot', int(os.getenv('API_ID')), os.getenv('API_HASH'))
-
-# ⚠️ TERA OFFICIAL GROUP KA ID DAALNA HAI
-OFFICIAL_GC_ID = -1001234567890  # ← YEH BADALNA HAI!
-
-# Official group ke liye welcome
-OFFICIAL_WELCOME_MSG = (
-    "**🎉 Welcome to the Infinite Alchemy Community!**\n\n"
-    "Thanks for joining us! Here you can:\n"
-    "🧪 Share your best discoveries\n"
-    "💡 Get help with combinations\n"
-    "🏆 Compete with other alchemists\n"
-    "🔬 Discuss strategies and recipes\n\n"
-    "**Quick Start:**\n"
-    "👉 Use `/craft` to combine elements\n"
-    "👉 Use `/inventory` to see your collection\n"
-    "👉 Use `/points` to check your score\n\n"
-    "We hope you enjoy your journey! ✨"
+from config import (
+    API_ID, API_HASH, BOT_TOKEN, BOT_USERNAME,
+    OFFICIAL_GC_ID,
+    DEV_URL, HELP_URL, GC_URL, CHANNEL_URL,
+    CRAFT_POINTS, INITIAL_ITEMS,
+    START_IMAGE,
+    START_MSG_DM, START_MSG_OFFICIAL_GC, START_MSG_OTHER_GROUP,
+    OFFICIAL_WELCOME_MSG, OTHER_GROUP_MSG,
+    CRAFT_EMPTY_MSG, CRAFT_FORMAT_MSG, SLOW_DOWN_MSG, DM_FIRST_MSG,
+    POINTS_GROUP_MSG, INVENTORY_GROUP_MSG, NOTHING_MSG, HELP_MSG
 )
 
-# Doosre group mein add ho toh
-OTHER_GROUP_MSG = (
-    "**🤖 Thanks for adding me in the group!**\n\n"
-    "I'm **Infinite Alchemy Bot** — I help you discover new elements by combining items!\n\n"
-    "**How to use:**\n"
-    "• `/craft Fire Water` — Combine two elements\n"
-    "• `/c Fire Water` — Shortcut\n"
-    "• `/inventory` — See your collection (DM only)\n"
-    "• `/points` — Check your score (DM only)\n\n"
-    "**To play, please use me in DM:** @your_bot_username\n"
-    "Type `/start` there to begin your journey! ✨"
-)
+client = TelegramClient('alchemy_bot', API_ID, API_HASH)
 
 async def set_commands():
     commands = [
@@ -58,14 +35,12 @@ async def set_commands():
 async def welcome_handler(event):
     """Handle when bot is added to a group"""
     try:
-        file_path = "assets/start_image.jpg"
+        file_path = START_IMAGE
         has_photo = os.path.exists(file_path)
         
-        # Jab bot ko kisi group mein add karein
         if event.user_added or event.user_join:
             for user in event.users:
                 if hasattr(user, 'id') and user.id == (await client.get_me()).id:
-                    # Bot add hua hai
                     chat_id = event.chat_id
                     
                     if chat_id == OFFICIAL_GC_ID:
@@ -81,7 +56,6 @@ async def welcome_handler(event):
                     
                     return
         
-        # Jab koi member join kare
         if event.user_join:
             for user in event.users:
                 if hasattr(user, 'id') and user.id == (await client.get_me()).id:
@@ -100,64 +74,35 @@ async def welcome_handler(event):
 async def start_handler(event):
     if event.is_group:
         if event.chat_id == OFFICIAL_GC_ID:
-            await event.reply(
-                "**🧪 Welcome to Official GC!**\n\n"
-                "Use `/craft [Item1] [Item2]` to combine elements!\n"
-                "Use `/help` for more info."
-            )
+            await event.reply(START_MSG_OFFICIAL_GC)
         else:
-            await event.reply(
-                "**🧪 Infinite Alchemy Bot**\n\n"
-                "Use me in DM to craft elements!\n"
-                "👉 @your_bot_username\n"
-                "Type `/start` there."
-            )
+            await event.reply(START_MSG_OTHER_GROUP)
         return
     
     # DM mein — photo + buttons
-    msg = (
-        "**🧪 Infinite Alchemy Bot**\n\n"
-        "You start with 4 basic items: Fire 🔥, Water 💦, Earth 🌏, and Wind 💨.\n"
-        "Combine them to discover new elements!\n\n"
-        "**How to craft:**\n"
-        "Use `/craft [Item1] [Item2]` or `/c [Item1] [Item2]`"
-    )
-    
     buttons = [
-        [Button.url("👨‍💻 Developer", "https://t.me/your_username")],
-        [Button.url("❓ Help", "https://t.me/help_link"),
-         Button.url("💬 Official GC", "https://t.me/your_group")],
-        [Button.url("📢 Official Channel", "https://t.me/your_channel")]
+        [Button.url("👨‍💻 Developer", DEV_URL)],
+        [Button.url("❓ Help", HELP_URL),
+         Button.url("💬 Official GC", GC_URL)],
+        [Button.url("📢 Official Channel", CHANNEL_URL)]
     ]
     
-    file_path = "assets/start_image.jpg"
+    file_path = START_IMAGE
     if os.path.exists(file_path):
-        await client.send_file(event.sender_id, file_path, caption=msg, buttons=buttons)
+        await client.send_file(event.sender_id, file_path, caption=START_MSG_DM, buttons=buttons)
         if event.chat_id != event.sender_id:
             await event.reply("✅ Check your DM!")
     else:
-        await event.reply(msg, buttons=buttons)
+        await event.reply(START_MSG_DM, buttons=buttons)
 
 @client.on(events.NewMessage(pattern=r'(?i)/help'))
 async def help_handler(event):
-    help_msg = (
-        "**📖 Help & Support**\n\n"
-        "**Commands:**\n"
-        "`/start` - Bot introduction\n"
-        "`/craft [item1] [item2]` - Combine two elements\n"
-        "`/c [item1] [item2]` - Shortcut for craft\n"
-        "`/inventory` - View your collection\n"
-        "`/points` - Check your score\n\n"
-        "**Need more help?**\n"
-        "Join our Official GC: @your_group\n"
-        "Contact Developer: @your_username"
-    )
-    await event.reply(help_msg)
+    await event.reply(HELP_MSG)
 
 @client.on(events.NewMessage(pattern=r'(?i)/points'))
 async def points_handler(event):
     if event.is_group:
-        await event.reply("⚠️ Use `/points` in DM to check your stats!")
+        await event.reply(POINTS_GROUP_MSG)
         return
     user = await db.users.find_one({"user_id": event.sender_id})
     points = user.get("points", 0) if user else 0
@@ -167,20 +112,19 @@ async def points_handler(event):
 @client.on(events.NewMessage(pattern=r'(?i)/inventory'))
 async def inventory_handler(event):
     if event.is_group:
-        await event.reply("⚠️ Use `/inventory` in DM to see your collection!")
+        await event.reply(INVENTORY_GROUP_MSG)
         return
     
     user_id = event.sender_id
     user = await db.users.find_one({"user_id": user_id})
     
     if not user or "inventory" not in user or not user["inventory"]:
-        initial = ["Fire 🔥", "Water 💦", "Earth 🌏", "Wind 💨"]
         await db.users.update_one(
             {"user_id": user_id},
-            {"$set": {"inventory": initial, "points": 0, "crafted_count": 0}},
+            {"$set": {"inventory": INITIAL_ITEMS, "points": 0, "crafted_count": 0}},
             upsert=True
         )
-        items = initial
+        items = INITIAL_ITEMS
     else:
         items = user.get("inventory", [])
     
@@ -189,7 +133,7 @@ async def inventory_handler(event):
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s*$'))
 async def craft_empty_handler(event):
-    await event.reply("⚠️ **Combine 2 objects to discover new elements!**\n\nExample: `/craft Fire Water`")
+    await event.reply(CRAFT_EMPTY_MSG)
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s+(.*)'))
 async def craft_handler(event):
@@ -197,37 +141,29 @@ async def craft_handler(event):
     args = text.split()
     
     if len(args) < 2:
-        await event.reply("⚠️ **Format:** `/craft [Item1] [Item2]`\nExample: `/craft Fire Water`")
+        await event.reply(CRAFT_FORMAT_MSG)
         return
     
     item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
     
-    # ✅ GC mein craft karne se pehle check karo ki user ne DM mein bot start kiya hai
     user = await db.users.find_one({"user_id": event.sender_id})
     
     if not user:
-        # User ne kabhi DM mein /start nahi kiya
         if event.is_group:
-            await event.reply(
-                "⚠️ **Please start the bot in DM first!**\n\n"
-                "Click here 👉 @your_bot_username\n"
-                "Type `/start` there, then come back to craft here!"
-            )
+            await event.reply(DM_FIRST_MSG)
             return
         else:
-            # DM mein hai toh user ko initialize karo
-            initial_items = ["Fire 🔥", "Water 💦", "Earth 🌏", "Wind 💨"]
             await db.users.insert_one({
                 "user_id": event.sender_id,
                 "points": 0,
                 "crafted_count": 0,
                 "last_craft_time": None,
-                "inventory": initial_items
+                "inventory": INITIAL_ITEMS
             })
             user = await db.users.find_one({"user_id": event.sender_id})
     
     if not await can_craft(event.sender_id):
-        await event.reply("⚠️ **Slow down!** Please wait 5 seconds.")
+        await event.reply(SLOW_DOWN_MSG)
         return
 
     inventory = user.get("inventory", []) if user else []
@@ -255,13 +191,13 @@ async def craft_handler(event):
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
             return
             
-        await add_craft_point(event.sender_id, new_item_name=result_name_emoji, points=2)
-        await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +2")
+        await add_craft_point(event.sender_id, new_item_name=result_name_emoji, points=CRAFT_POINTS)
+        await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS}")
     else:
-        await event.reply("❌ This combination created nothing.")
+        await event.reply(NOTHING_MSG)
 
 async def main():
-    await client.start(bot_token=os.getenv('BOT_TOKEN'))
+    await client.start(bot_token=BOT_TOKEN)
     await set_commands()
     print("Bot is running!")
     await client.run_until_disconnected()
