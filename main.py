@@ -23,6 +23,7 @@ async def set_commands():
         types.BotCommand("craft", "Start crafting (Ex: /craft Fire Water)"),
         types.BotCommand("points", "Check your current points"),
         types.BotCommand("inventory", "View your discovered elements"),
+        types.BotCommand("redeem", "Redeem Rewards through this command"),
         types.BotCommand("help", "Get help and support")
     ]
     await client(SetBotCommandsRequest(
@@ -106,15 +107,54 @@ async def start_handler(event):
 async def help_handler(event):
     await event.reply(HELP_MSG)
 
+def get_progress_bar(current, target):
+    percent = min(current / target, 1.0)
+    filled = int(percent * 10)
+    bar = "▓" * filled + "░" * (10 - filled)
+    return f"[{bar}] {int(percent * 100)}%"
+
 @client.on(events.NewMessage(pattern=r'(?i)/points'))
 async def points_handler(event):
     if event.is_group:
         await event.reply(POINTS_GROUP_MSG)
         return
+    
     user = await db.users.find_one({"user_id": event.sender_id})
     points = user.get("points", 0) if user else 0
-    crafted = user.get("crafted_count", 0) if user else 0
-    await event.reply(f"📊 **Your Stats**\n\n💎 Points: {points}\n🧪 Total Crafts: {crafted}")
+    coins = user.get("coins", 0) if user else 0 # Ab coins fetch honge
+    
+    # Progress Bar (Target 1000 for smallest reward)
+    bar = get_progress_bar(coins, 1000)
+    
+    msg = (
+        f"📊 **Alchemist Stats**\n\n"
+        f"💎 Points: `{points}`\n"
+        f"🪙 Coins: `{coins}`\n\n"
+        f"🚀 **Next Reward Progress:**\n"
+        f"{bar}\n\n"
+        f"__Use /redeem to see available rewards!__"
+    )
+    await event.reply(msg)
+
+@client.on(events.NewMessage(pattern=r'(?i)/redeem'))
+async def redeem_handler(event):
+    if event.is_group: return
+    
+    user = await db.users.find_one({"user_id": event.sender_id})
+    coins = user.get("coins", 0) if user else 0
+    
+    rewards_msg = (
+        "🎁 **Rewards Store**\n\n"
+        f"Your Coins: 🪙 {coins}\n\n"
+        "1. 🎫 **10rs Playstore Code** (1000 Coins)\n"
+        "2. 📞 **Telegram ID Promotion** (5000 Coins)\n"
+        "3. 💎 **Telegram Premium** (10000 Coins)\n\n"
+        "**To Redeem:** Type `/redeem [number]`"
+    )
+    
+    args = event.pattern_match.group(1) # Iske liye regex change karni padegi
+    # Ya seedha buttons add kar do, wo zyada professional lagega
+    await event.reply(rewards_msg)
 
 @client.on(events.NewMessage(pattern=r'(?i)/inventory'))
 async def inventory_handler(event):
