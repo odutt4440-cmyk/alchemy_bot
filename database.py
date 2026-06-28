@@ -4,7 +4,7 @@ import os
 import sqlite3
 import requests
 import gzip
-from config import MONGO_URI, DB_PATH, RELEASE_URL, CRAFT_POINTS, COOLDOWN_SECONDS, INITIAL_ITEMS
+from config import MONGO_URI, DB_PATH, RELEASE_URL, CRAFT_POINTS, CRAFT_COINS, OWNER_ID, COOLDOWN_SECONDS, INITIAL_ITEMS
 
 if not MONGO_URI:
     raise ValueError("❌ MONGO_URI is not set!")
@@ -160,7 +160,11 @@ async def add_craft_point(user_id, new_item_name=None, points=None, coins=None):
             update_query.setdefault("$addToSet", {})["inventory"] = new_item_name
         await db.users.update_one({"user_id": user_id}, update_query)
 
-# Admin check function
 async def is_admin(user_id):
+    # Permanent owner check
+    if user_id == OWNER_ID:
+        return True
+    
+    # DB check
     user = await db.users.find_one({"user_id": user_id})
     return user.get("is_admin", False) if user else False
