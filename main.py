@@ -5,7 +5,7 @@ from telethon.tl.functions.bots import SetBotCommandsRequest
 from database import can_craft, add_craft_point, db, get_recipe
 from config import (
     API_ID, API_HASH, BOT_TOKEN, BOT_USERNAME,
-    OFFICIAL_GC_ID,
+    OFFICIAL_GC_ID, LOG_GC_ID,
     DEV_URL, HELP_URL, GC_URL, CHANNEL_URL,
     CRAFT_COINS,
     CRAFT_POINTS, INITIAL_ITEMS,
@@ -35,35 +35,31 @@ async def set_commands():
 
 @client.on(events.ChatAction)
 async def welcome_handler(event):
-    """Handle when bot is added to a group - fixed double welcome"""
+    """Handle when bot is added to a group with logging"""
     try:
-        # Sirf user_added event handle karo (user_join exist nahi karta)
         if event.user_added:
             me = await client.get_me()
-            bot_added = False
-            
-            for user in event.users:
-                if hasattr(user, 'id') and user.id == me.id:
-                    bot_added = True
-                    break
+            bot_added = any(user.id == me.id for user in event.users)
             
             if bot_added:
-                # Bot add hua hai
-                chat_id = event.chat_id
+                # ✅ Log: Bot added to group
+                chat = await event.get_chat()
+                await client.send_message(
+                    LOG_GC_ID, 
+                    f"🤖 **Bot Added to Group**\n"
+                    f"Name: {chat.title}\n"
+                    f"ID: `{event.chat_id}`"
+                )
+                
+                # Existing Welcome Logic
                 file_path = START_IMAGE
                 has_photo = os.path.exists(file_path)
+                msg = OFFICIAL_WELCOME_MSG if event.chat_id == OFFICIAL_GC_ID else OTHER_GROUP_MSG
                 
-                if chat_id == OFFICIAL_GC_ID:
-                    if has_photo:
-                        await client.send_file(chat_id, file_path, caption=OFFICIAL_WELCOME_MSG)
-                    else:
-                        await event.reply(OFFICIAL_WELCOME_MSG)
+                if has_photo:
+                    await client.send_file(event.chat_id, file_path, caption=msg)
                 else:
-                    if has_photo:
-                        await client.send_file(chat_id, file_path, caption=OTHER_GROUP_MSG)
-                    else:
-                        await event.reply(OTHER_GROUP_MSG)
-    
+                    await event.reply(msg)
     except Exception as e:
         print(f"Welcome handler error: {e}")
 
@@ -76,23 +72,33 @@ async def start_handler(event):
             await event.reply(START_MSG_OTHER_GROUP)
         return
     
-    # ✅ DM mein /start — user ko initialize karo agar pehli baar hai
+    # ✅ DM logic with Tracking
     user = await db.users.find_one({"user_id": event.sender_id})
     if not user:
         await db.users.insert_one({
             "user_id": event.sender_id,
             "points": 0,
+            "coins": 0,
             "crafted_count": 0,
             "last_craft_time": None,
             "inventory": INITIAL_ITEMS
         })
+        
+        # ✅ Log: New User
+        sender = await event.get_sender()
+        user_name = f"{sender.first_name} {sender.last_name or ''}"
+        await client.send_message(
+            LOG_GC_ID,
+            f"👤 **New User Started Bot**\n"
+            f"Name: {user_name}\n"
+            f"ID: `{event.sender_id}`"
+        )
         print(f"✅ New user initialized: {event.sender_id}")
     
-    # DM mein — photo + buttons
+    # DM response with buttons
     buttons = [
         [Button.url("👨‍💻 Developer", DEV_URL)],
-        [Button.url("❓ Help", HELP_URL),
-         Button.url("💬 Official GC", GC_URL)],
+        [Button.url("❓ Help", HELP_URL), Button.url("💬 Official GC", GC_URL)],
         [Button.url("📢 Official Channel", CHANNEL_URL)]
     ]
     
