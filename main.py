@@ -3,7 +3,7 @@ import asyncio
 from dotenv import load_dotenv
 from telethon import TelegramClient, events, types
 from telethon.tl.functions.bots import SetBotCommandsRequest
-from database import can_craft, add_craft_point, db, get_recipe
+from database import can_craft, add_craft_point, db, get_recipe  # ✅ get_item_name hata diya
 
 load_dotenv()
 
@@ -91,23 +91,19 @@ async def craft_handler(event):
         await event.reply(f"❌ You don't have **{missing}**! Check your /inventory.")
         return
 
-    # ✅ FIXED: Recipe lookup — ab sab SQLite se aayega
     recipe = await get_recipe(item1_input, item2_input)
     
     if recipe:
-        result_name_emoji = recipe['result']  # e.g "Steam 💨" (name + emoji already combined)
+        result_name_emoji = recipe['result']
         result_emoji = recipe.get('emoji', '🧪')
         
-        # Check if already crafted
         if any(result_name_emoji.split(' ')[0].lower() in item.lower() for item in inventory):
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
             return
             
-        # Nayi craft hui toh add karo
         await add_craft_point(event.sender_id, new_item_name=result_name_emoji, new_item_emoji=result_emoji, points=2)
         await event.reply(f"✨ **Crafted:** {result_name_emoji} 🧪\nTotal Points: +2")
     else:
-        # Reverse order bhi check karega — get_recipe already handles this
         await event.reply("❌ This combination created nothing.")
 
 async def main():
@@ -118,3 +114,4 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+    
