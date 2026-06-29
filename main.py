@@ -57,29 +57,57 @@ async def set_commands():
 
 @client.on(events.ChatAction)
 async def welcome_handler(event):
-    """Handle when bot is added to a group with logging"""
+    """Fixed: Single trigger for add, proper group logging, and welcome msg"""
     try:
-        if event.user_added:
-            me = await client.get_me()
-            bot_added = any(user.id == me.id for user in event.users)
-            
-            if bot_added:
+        me = await client.get_me()
+        
+        # 1. Sirf tab chalega agar BOT add hua hai
+        if event.user_added or event.user_joined:
+            if any(user.id == me.id for user in event.users):
                 chat = await event.get_chat()
+                
+                # Check agar ye log already DB mein hai toh skip karo (duplicate prevent)
+                exists = await db.groups.find_one({"id": event.chat_id})
+                if exists: return 
+
+                # User ki info jisne add kiya
+                adder = await event.get_sender()
+                adder_name = f"{adder.first_name} {adder.last_name or ''}"
+                adder_uname = f"@{adder.username}" if adder.username else "None"
+                
+                # Group Link (Agar private hua toh None)
+                chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
+
+                # Log to LOG_GC
                 await client.send_message(
                     LOG_GC_ID, 
-                    f"🤖 **Bot Added to Group**\n"
-                    f"Name: {chat.title}\n"
-                    f"ID: `{event.chat_id}`"
+                    f"🤖 **Bot Added to Group**\n\n"
+                    f"🏢 **Group:** {chat.title}\n"
+                    f"🆔 **GC ID:** `{event.chat_id}`\n"
+                    f"🔗 **Link:** {chat_link}\n\n"
+                    f"👤 **Added By:** {adder_name}\n"
+                    f"📛 **Username:** `{adder_uname}`\n"
+                    f"🆔 **User ID:** `{adder.id}`"
                 )
                 
+                # Save to DB (Active status)
+                await db.groups.update_one({"id": event.chat_id}, {"$set": {"active": True, "title": chat.title}}, upsert=True)
+
+                # Welcome Message Logic
                 file_path = START_IMAGE
-                has_photo = os.path.exists(file_path)
-                msg = OFFICIAL_WELCOME_MSG if event.chat_id == OFFICIAL_GC_ID else OTHER_GROUP_MSG
+                # Fix: Cast to int to compare IDs correctly
+                msg = OFFICIAL_WELCOME_MSG if int(event.chat_id) == int(OFFICIAL_GC_ID) else OTHER_GROUP_MSG
                 
-                if has_photo:
+                if os.path.exists(file_path):
                     await client.send_file(event.chat_id, file_path, caption=msg)
                 else:
                     await event.reply(msg)
+
+        # 2. Bot kicked/left logic
+        elif event.user_kicked or event.user_left:
+            if event.user_id == me.id or any(u.id == me.id for u in event.users):
+                await db.groups.update_one({"id": event.chat_id}, {"$set": {"active": False}})
+
     except Exception as e:
         print(f"Welcome handler error: {e}")
 
