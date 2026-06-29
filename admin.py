@@ -166,16 +166,69 @@ async def bc_callback(event):
 @events.register(events.NewMessage(pattern=r'/stats'))
 async def stats(event):
     if not await is_admin(event.sender_id): return
-    total = await db.users.count_documents({})
-    await event.reply(f"📊 **Bot Stats**\nTotal Users: `{total}`")
+    
+    # Counts
+    total_users = await db.users.count_documents({})
+    total_gcs = await db.groups.count_documents({"active": True})
+    
+    # Server Health (CPU/RAM)
+    import psutil
+    cpu = psutil.cpu_percent()
+    ram = psutil.virtual_memory().percent
+    
+    await event.reply(
+        f"📊 **Bot System Stats**\n\n"
+        f"👥 **Total Users:** `{total_users}`\n"
+        f"🏢 **Active Groups:** `{total_gcs}`\n\n"
+        f"🖥 **CPU Load:** `{cpu}%`\n"
+        f"💾 **RAM Usage:** `{ram}%`\n"
+        f"✅ **Status:** `Stable`"
+    )
 
 @events.register(events.NewMessage(pattern=r'/info'))
 async def info(event):
     if not await is_admin(event.sender_id): return
-    uid = int(event.text.split()[1]) if len(event.text.split()) > 1 else (event.reply_to_msg_id and (await event.get_reply_message()).sender_id)
+    
+    # ID nikalne ka solid logic
+    args = event.text.split()
+    reply = await event.get_reply_message()
+    uid = int(args[1]) if len(args) > 1 else (reply.sender_id if reply else None)
+    
+    if not uid: return await event.reply("❌ Usage: `/info [uid]` or reply to user!")
+    
     u = await db.users.find_one({"user_id": uid})
-    if not u: return await event.reply("User not found!")
-    await event.reply(f"👤 **Info for {uid}**\n💎 Coins: {u.get('coins')}\n🧪 Crafted: {u.get('crafted_count')}\n🎒 Inventory: {len(u.get('inventory'))}")
+    if not u: return await event.reply("❌ User not found in database!")
+    
+    # Get basic details
+    try:
+        user_ent = await event.client.get_entity(uid)
+        name = user_ent.first_name
+        uname = f"@{user_ent.username}" if user_ent.username else "None"
+    except:
+        name = "Unknown"; uname = "None"
+        
+    await event.reply(
+        f"👤 **User Profile: {uid}**\n\n"
+        f"📛 **Name:** {name}\n"
+        f"🎭 **Username:** {uname}\n"
+        f"💎 **Coins:** `{u.get('coins', 0)}`\n"
+        f"🧪 **Crafted:** `{u.get('crafted_count', 0)}`\n"
+        f"🎒 **Inventory:** `{len(u.get('inventory', []))} items`\n"
+        f"🛡 **Status:** `{'Banned' if u.get('is_banned') else 'Active'}`"
+    )
+
+@events.register(events.NewMessage(pattern=r'/activegc'))
+async def activegc(event):
+    if not await is_admin(event.sender_id): return
+    
+    groups = await db.groups.find({"active": True}).to_list(length=None)
+    if not groups: return await event.reply("🏢 No active groups found!")
+    
+    msg = "🏢 **Active Groups List:**\n\n"
+    for i, g in enumerate(groups, 1):
+        msg += f"{i}. {g.get('title', 'Unknown')} (`{g.get('id')}`)\n"
+    
+    await event.reply(msg)
 
 @events.register(events.NewMessage(pattern=r'/giveredeem'))
 async def give_redeem(event):
