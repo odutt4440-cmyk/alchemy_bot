@@ -16,61 +16,37 @@ db = mongo_client.infinite_craft
 _sqlite_conn = None
 
 def _download_sqlite_db():
-    """Download DB from GitHub Release if not exists - only once"""
     global _sqlite_conn
     
     if os.path.exists(DB_PATH):
         return
     
-    print("📥 Downloading game database from Release...")
+    print("📥 Downloading game database...")
+    # ... (download wala code wahi rehne do) ...
     
-    resp = requests.get(RELEASE_URL, stream=True)
-    
-    if resp.status_code != 200:
-        print(f"❌ Download failed: HTTP {resp.status_code}")
-        return
-    
-    total_size = int(resp.headers.get('content-length', 0))
-    downloaded = 0
-    
-    with open("infinite_craft.db.gz", "wb") as f:
-        for chunk in resp.iter_content(chunk_size=8192):
-            f.write(chunk)
-            downloaded += len(chunk)
-            if total_size > 0:
-                pct = (downloaded / total_size) * 100
-                print(f"   ⏳ Downloading... {pct:.0f}%", end="\r")
-    
-    print(f"\n   ✅ Downloaded ({downloaded/1024/1024:.0f} MB)")
-    
-    print("📦 Decompressing...")
+    print("📦 Decompressing (Streaming to disk)...")
     with gzip.open("infinite_craft.db.gz", "rb") as f_in:
         with open(DB_PATH, "wb") as f_out:
-            f_out.write(f_in.read())
+            # YE RAM BACHAYEGA: Chunk by chunk copy karega, RAM full nahi hogi
+            shutil.copyfileobj(f_in, f_out) 
     
     os.remove("infinite_craft.db.gz")
-    
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM recipes")
-        r_count = c.fetchone()[0]
-        c.execute("SELECT COUNT(*) FROM elements")
-        e_count = c.fetchone()[0]
-        conn.close()
-        print(f"✅ Game DB ready! {e_count} elements, {r_count} recipes")
-    except Exception as e:
-        print(f"⚠️ DB verification error: {e}")
+    print("✅ Game DB ready!")
 
 def _get_sqlite_conn():
-    """Get SQLite connection - cached for performance"""
     global _sqlite_conn
     _download_sqlite_db()
     
     if _sqlite_conn is None:
-        _sqlite_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        # uri=True aur mode=ro, immutable=1 RAM bachane ke liye ultimate combo hai
+        db_uri = f"file:{DB_PATH}?mode=ro&immutable=1"
+        _sqlite_conn = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
         _sqlite_conn.row_factory = sqlite3.Row
-    
+        
+        # Performance fix: RAM cache limit set karo (Sirf 1MB cache)
+        _sqlite_conn.execute("PRAGMA cache_size = -1000") 
+        _sqlite_conn.execute("PRAGMA temp_store = MEMORY")
+        
     return _sqlite_conn
 
 # ===== GAME DATA LOOKUP (SQLite) =====
