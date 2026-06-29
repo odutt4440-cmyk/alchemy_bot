@@ -22,7 +22,7 @@ from admin import (
 )
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
-
+ITEMS_PER_PAGE = 30
 # Maintenance check helper
 async def check_maintenance(event):
     if MAINTENANCE.get("status"):
@@ -215,26 +215,61 @@ async def redeem_callback(event):
 
 @client.on(events.NewMessage(pattern=r'(?i)/inventory'))
 async def inventory_handler(event):
-    if await check_maintenance(event): return
-    if event.is_group:
-        await event.reply(INVENTORY_GROUP_MSG)
+    user_id = event.sender_id
+    # Pehle sirf total count lelo
+    user = await db.users.find_one({"user_id": user_id})
+    total_items = len(user.get("inventory", [])) if user else 0
+    
+    # 0th page se shuru karo
+    await send_inventory_page(event, user_id, 0, total_items)
+
+async def send_inventory_page(event, owner_id, page, total_count):
+    # MongoDB se sirf current page ka slice uthao (RAM bachegi!)
+    user_data = await db.users.find_one(
+        {"user_id": owner_id},
+        {"inventory": {"$slice": [page * ITEMS_PER_PAGE, ITEMS_PER_PAGE]}}
+    )
+    
+    items = user_data.get("inventory", []) if user_data else []
+    display_text = ", ".join(items)
+    
+    text = (f"🎒 **Your Collection ({total_count} items):**\n"
+            f"📄 Page {page + 1} / {((total_count - 1) // ITEMS_PER_PAGE) + 1}\n\n"
+            f"{display_text}")
+    
+    # Buttons logic
+    buttons = []
+    row = []
+    if page > 0:
+        row.append(Button.inline("◀️ Prev", data=f"inv_{owner_id}_{page-1}"))
+    if (page + 1) * ITEMS_PER_PAGE < total_count:
+        row.append(Button.inline("Next ▶️", data=f"inv_{owner_id}_{page+1}"))
+    
+    if row:
+        buttons.append(row)
+        
+    if isinstance(event, (events.NewMessage.Event, events.Message)):
+        await event.reply(text, buttons=buttons)
+    else:
+        await event.edit(text, buttons=buttons)
+
+# Callback Handler (Button click)
+@client.on(events.CallbackQuery(pattern=b"inv_"))
+async def callback_handler(event):
+    data = event.data.decode().split("_")
+    owner_id = int(data[1])
+    target_page = int(data[2])
+    
+    # Security Check
+    if event.sender_id != owner_id:
+        await event.answer("🚫 \"This is not your inventory, stay away!\"", alert=True)
         return
     
-    user_id = event.sender_id
-    user = await db.users.find_one({"user_id": user_id})
+    # Count wapas fetch karo (agar items badhe hon toh)
+    user = await db.users.find_one({"user_id": owner_id})
+    total_count = len(user.get("inventory", [])) if user else 0
     
-    if not user or "inventory" not in user or not user["inventory"]:
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"inventory": INITIAL_ITEMS, "points": 0, "crafted_count": 0}},
-            upsert=True
-        )
-        items = INITIAL_ITEMS
-    else:
-        items = user.get("inventory", [])
-    
-    display_items = ", ".join(items)
-    await event.reply(f"🎒 **Your Collection ({len(items)} items):**\n\n{display_items}")
+    await send_inventory_page(event, owner_id, target_page, total_count)
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s*$'))
 async def craft_empty_handler(event):
