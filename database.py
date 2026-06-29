@@ -3,6 +3,7 @@ import datetime
 import os
 import sqlite3
 import requests
+import shutil
 import gzip
 from config import MONGO_URI, DB_PATH, RELEASE_URL, CRAFT_POINTS, CRAFT_COINS, OWNER_ID, COOLDOWN_SECONDS, INITIAL_ITEMS
 
@@ -26,15 +27,23 @@ def _download_sqlite_db():
         return
     
     print("📥 Downloading game database...")
-    # ... (download wala code wahi rehne do) ...
+    resp = requests.get(RELEASE_URL, stream=True)
     
+    # 1. Yahan GZ_PATH use karo taaki file sahi jagah save ho
+    with open(GZ_PATH, "wb") as f:
+        shutil.copyfileobj(resp.raw, f)
+            
     print("📦 Decompressing (Streaming to disk)...")
-    with gzip.open("infinite_craft.db.gz", "rb") as f_in:
+    
+    # 2. Yahan bhi GZ_PATH variable use karo
+    with gzip.open(GZ_PATH, "rb") as f_in:
         with open(DB_PATH, "wb") as f_out:
-            # YE RAM BACHAYEGA: Chunk by chunk copy karega, RAM full nahi hogi
             shutil.copyfileobj(f_in, f_out) 
     
-    os.remove("infinite_craft.db.gz")
+    # 3. Clean up
+    if os.path.exists(GZ_PATH):
+        os.remove(GZ_PATH)
+        
     print("✅ Game DB ready!")
 
 def _get_sqlite_conn():
