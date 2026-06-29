@@ -26,6 +26,8 @@ ITEMS_PER_PAGE = 30
 # Maintenance check helper
 async def check_maintenance(event):
     if MAINTENANCE.get("status"):
+        if event.sender_id == OWNER_ID or await is_admin(event.sender_id):
+            return False
         await event.reply(f"⚠️ **Maintenance Notice**\n\n{MAINTENANCE.get('reason')}")
         return True
     return False
@@ -338,10 +340,8 @@ async def craft_handler(event):
         result_name_emoji = recipe['result']
         
         # --- DEBUG LOGS START ---
-        # Logic: result_name ka pehla word check karo
-        res_first_word = result_name_emoji.split(' ')[0].lower()
-        is_already_in = any(res_first_word in item.lower() for item in inventory)
-        print(f"DEBUG: Recipe Result: {result_name_emoji} | Checking word: {res_first_word}")
+        is_already_in = any(result_name_emoji.lower() == item.lower() for item in inventory)
+        print(f"DEBUG: Recipe Result: {result_name_emoji}")
         print(f"DEBUG: Already exists in inventory? {is_already_in}")
         # --- DEBUG LOGS END ---
 
