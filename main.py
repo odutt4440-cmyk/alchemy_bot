@@ -224,7 +224,7 @@ async def inventory_handler(event):
     await send_inventory_page(event, user_id, 0, total_items)
 
 async def send_inventory_page(event, owner_id, page, total_count):
-    # MongoDB se sirf current page ka slice uthao (RAM bachegi!)
+    # MongoDB se sirf current page ka slice uthao
     user_data = await db.users.find_one(
         {"user_id": owner_id},
         {"inventory": {"$slice": [page * ITEMS_PER_PAGE, ITEMS_PER_PAGE]}}
@@ -248,9 +248,11 @@ async def send_inventory_page(event, owner_id, page, total_count):
     if row:
         buttons.append(row)
         
-    if isinstance(event, (events.NewMessage.Event, events.Message)):
+    # FIX: Sirf events.NewMessage.Event check karo
+    if isinstance(event, events.NewMessage.Event):
         await event.reply(text, buttons=buttons)
     else:
+        # Agar ye CallbackQuery event hai, toh edit karo
         await event.edit(text, buttons=buttons)
 
 # Callback Handler (Button click)
