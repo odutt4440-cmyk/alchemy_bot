@@ -15,6 +15,10 @@ db = mongo_client.infinite_craft
 # SQLite connection cache
 _sqlite_conn = None
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "infinite_craft.db")
+GZ_PATH = os.path.join(BASE_DIR, "infinite_craft.db.gz")
+
 def _download_sqlite_db():
     global _sqlite_conn
     
