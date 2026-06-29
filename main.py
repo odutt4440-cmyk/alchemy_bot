@@ -224,20 +224,19 @@ async def inventory_handler(event):
     await send_inventory_page(event, user_id, 0, total_items)
 
 async def send_inventory_page(event, owner_id, page, total_count):
-    # MongoDB se sirf current page ka slice uthao
     user_data = await db.users.find_one(
         {"user_id": owner_id},
         {"inventory": {"$slice": [page * ITEMS_PER_PAGE, ITEMS_PER_PAGE]}}
     )
     
     items = user_data.get("inventory", []) if user_data else []
-    display_text = ", ".join(items)
+    display_text = ", ".join(items) if items else "No items found!"
     
     text = (f"🎒 **Your Collection ({total_count} items):**\n"
-            f"📄 Page {page + 1} / {((total_count - 1) // ITEMS_PER_PAGE) + 1}\n\n"
+            f"📄 Page {page + 1} / {max(1, (total_count - 1) // ITEMS_PER_PAGE + 1)}\n\n"
             f"{display_text}")
     
-    # Buttons logic
+    # BUTTONS KA SAHI STRUCTURE
     buttons = []
     row = []
     if page > 0:
@@ -245,14 +244,16 @@ async def send_inventory_page(event, owner_id, page, total_count):
     if (page + 1) * ITEMS_PER_PAGE < total_count:
         row.append(Button.inline("Next ▶️", data=f"inv_{owner_id}_{page+1}"))
     
+    # Agar row mein buttons hain, tabhi buttons list mein add karo
     if row:
         buttons.append(row)
-        
-    # FIX: Sirf events.NewMessage.Event check karo
-    if isinstance(event, events.NewMessage.Event):
+    else:
+        buttons = None # Bilkul empty list bhejoge toh error aayega, None bhejna safe hai
+
+    # Reply/Edit logic
+    if isinstance(event, (events.NewMessage.Event, events.Message)):
         await event.reply(text, buttons=buttons)
     else:
-        # Agar ye CallbackQuery event hai, toh edit karo
         await event.edit(text, buttons=buttons)
 
 # Callback Handler (Button click)
