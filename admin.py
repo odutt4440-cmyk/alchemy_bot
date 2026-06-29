@@ -2,22 +2,26 @@ from telethon import events, Button
 from database import db, is_admin
 from config import LOG_GC_ID, OWNER_ID
 
-MAINTENANCE = {"status": False, "reason": "Bot is under maintenance!"}
 
 @events.register(events.NewMessage(pattern=r'/maintenance (on|off)(.*)'))
 async def maintenance_mode(event):
-    # Ab yahan check karo ki kya sender OWNER_ID hai ya ADMIN hai
+    # Admin/Owner check
     if event.sender_id != OWNER_ID and not await is_admin(event.sender_id):
         return
 
     mode = event.pattern_match.group(1)
     reason = event.pattern_match.group(2).strip() or "Bot is under maintenance!"
     
+    # Status ko DB mein update karo (Permanent fix)
+    await db.config.update_one(
+        {"_id": "maintenance"}, 
+        {"$set": {"status": mode == "on", "reason": reason}}, 
+        upsert=True
+    )
+    
     if mode == "on":
-        MAINTENANCE.update({"status": True, "reason": reason})
-        await event.reply(f"✅ Maintenance Mode ON: {reason}")
+        await event.reply(f"✅ Maintenance Mode ON\nReason: {reason}")
     else:
-        MAINTENANCE["status"] = False
         await event.reply("✅ Maintenance Mode OFF")
 
 @events.register(events.NewMessage(pattern=r'/sudohelp'))
