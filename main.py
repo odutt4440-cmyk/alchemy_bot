@@ -17,18 +17,26 @@ from config import (
 )
 # Admin imports
 from admin import (
-    MAINTENANCE, sudohelp, addsudo, power_callback, coins_cmd, 
+    sudohelp, addsudo, power_callback, coins_cmd, 
     ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem
 )
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
 ITEMS_PER_PAGE = 30
 # Maintenance check helper
+# main.py mein ye function replace kar do
 async def check_maintenance(event):
-    if MAINTENANCE.get("status"):
+    # DB se status lao
+    m_data = await db.config.find_one({"_id": "maintenance"})
+    is_m = m_data.get("status", False) if m_data else False
+    
+    if is_m:
+        # Owner/Admin bypass
         if event.sender_id == OWNER_ID or await is_admin(event.sender_id):
             return False
-        await event.reply(f"⚠️ **Maintenance Notice**\n\n{MAINTENANCE.get('reason')}")
+            
+        reason = m_data.get("reason", "Bot is under maintenance!")
+        await event.reply(f"⚠️ **Maintenance Notice**\n\n{reason}")
         return True
     return False
 
