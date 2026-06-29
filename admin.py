@@ -4,7 +4,7 @@ from config import LOG_GC_ID, OWNER_ID
 
 MAINTENANCE = {"status": False, "reason": "Bot is under maintenance!"}
 
-@client.on(events.NewMessage(pattern=r'/maintenance (on|off)(.*)'))
+@events.register(events.NewMessage(pattern=r'/maintenance (on|off)(.*)'))
 async def maintenance_mode(event):
     # Ab yahan check karo ki kya sender OWNER_ID hai ya ADMIN hai
     if event.sender_id != OWNER_ID and not await is_admin(event.sender_id):
