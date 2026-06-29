@@ -389,7 +389,8 @@ async def craft_handler(event):
             event.sender_id, 
             new_item_name=result_name_emoji, 
             points=CRAFT_POINTS, 
-            coins=CRAFT_COINS
+            coins=CRAFT_COINS,
+            group_id=event.chat_id
         )
         await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS} | Coins: +{CRAFT_COINS}")
     else:
