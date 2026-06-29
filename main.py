@@ -313,6 +313,11 @@ async def craft_handler(event):
 
     inventory = user.get("inventory", []) if user else []
     
+    # --- DEBUG LOGS START ---
+    print(f"DEBUG: User ID: {event.sender_id} | Crafting: {item1_input} + {item2_input}")
+    print(f"DEBUG: Inventory items count: {len(inventory)}")
+    # --- DEBUG LOGS END ---
+    
     def find_item_in_inv(name, inv):
         for item in inv:
             if name.lower() in item.lower():
@@ -331,7 +336,16 @@ async def craft_handler(event):
     
     if recipe:
         result_name_emoji = recipe['result']
-        if any(result_name_emoji.split(' ')[0].lower() in item.lower() for item in inventory):
+        
+        # --- DEBUG LOGS START ---
+        # Logic: result_name ka pehla word check karo
+        res_first_word = result_name_emoji.split(' ')[0].lower()
+        is_already_in = any(res_first_word in item.lower() for item in inventory)
+        print(f"DEBUG: Recipe Result: {result_name_emoji} | Checking word: {res_first_word}")
+        print(f"DEBUG: Already exists in inventory? {is_already_in}")
+        # --- DEBUG LOGS END ---
+
+        if is_already_in:
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
             return
             
