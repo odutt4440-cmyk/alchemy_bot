@@ -119,12 +119,18 @@ async def can_craft(user_id):
     
     return (now - last_time).total_seconds() >= COOLDOWN_SECONDS
 
-# add_craft_point ko update karo (coins support ke liye)
 async def add_craft_point(user_id, new_item_name=None, points=None, coins=None):
     points = points if points is not None else CRAFT_POINTS
     coins = coins if coins is not None else CRAFT_COINS # config se import karna
     now = datetime.datetime.now(datetime.timezone.utc)
     
+    # 1. History log for Leaderboard (Daily/Today stats)
+    await db.craft_history.insert_one({
+        "user_id": user_id,
+        "points": points,
+        "crafted_at": now
+    })
+
     user = await db.users.find_one({"user_id": user_id})
     
     if not user:
