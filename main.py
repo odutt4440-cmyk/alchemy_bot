@@ -340,7 +340,7 @@ async def craft_empty_handler(event):
 async def craft_handler(event):
     if await check_maintenance(event): return
 
-    # 1. Inspection & Captcha Check (As per your request)
+    # 1. Inspection & Captcha Check
     if inspection_mode.get(event.sender_id, False):
         user = await db.users.find_one({"user_id": event.sender_id})
         last_time = user.get("last_craft_time")
@@ -354,7 +354,6 @@ async def craft_handler(event):
         await event.reply("🚫 **Access Blocked!** Admin has sent a verification captcha to your DM.")
         return
 
-    # 2. Input Parsing
     raw_text = event.pattern_match.group(2).strip()
     
     if not user:
@@ -370,23 +369,24 @@ async def craft_handler(event):
 
     inventory = user.get("inventory", [])
     
-    # --- FIXED SMART MATCHING ---
-    # Hum seedha inventory items check karenge
+    # --- BULLETPROOF MATCHING ---
+    import re
+    def get_clean_name(name):
+        # Sabse pehle underscore hatao, phir non-alphanumeric chars (emojis) hatao
+        name = name.replace("_", " ")
+        return re.sub(r'[^\w\s]', '', name).strip().lower()
+
     def match_item(input_str, inv):
-        search = input_str.replace("_", " ").lower()
+        search = get_clean_name(input_str)
         for item in inv:
-            # Emoji hatakar sirf name match karo
-            clean = item.split(" 🕳️")[0].split(" 🌊")[0].split(" 🔥")[0].split(" 💨")[0].lower()
-            if search == clean:
+            if search == get_clean_name(item):
                 return item
         return None
 
-    # Logic: Text ko '+' ya space se split karo aur check karo ki kaunsa combination inventory mein hai
-    # User input ko handle karne ka behtar tarika
+    # Splitting logic
     parts = raw_text.replace("+", " ").split()
     item1, item2 = None, None
 
-    # Try every possible split position
     for i in range(1, len(parts)):
         cand1 = match_item(" ".join(parts[:i]), inventory)
         cand2 = match_item(" ".join(parts[i:]), inventory)
@@ -395,18 +395,17 @@ async def craft_handler(event):
             break
             
     if not item1 or not item2:
-        await event.reply("❌ **Format Error!**\nUse: `/c Item1 Item2`\nExample: `/c Black_Hole Hot_Air`")
+        await event.reply(f"❌ **Format Error!**\nInput received: `{raw_text}`\nUse: `/c Item1 Item2`")
         return
 
     print(f"DEBUG: Crafting: {item1} + {item2}")
 
-    # Recipe lookup
     recipe = await get_recipe(item1, item2)
     
     if recipe:
         result = recipe['result']
-        # Check if already exists (Ignore emojis for check)
-        if any(result.lower() == i.lower().split(" 🕳️")[0] for i in inventory):
+        # Check if already exists
+        if any(get_clean_name(result) == get_clean_name(i) for i in inventory):
             await event.reply(f"♻️ You have already crafted **{result}**!")
             return
             
