@@ -1,4 +1,6 @@
 from motor.motor_asyncio import AsyncIOMotorClient
+import random
+import string
 import datetime
 import os
 import sqlite3
@@ -161,6 +163,15 @@ async def add_craft_point(user_id, first_name=None, new_item_name=None, points=N
         if new_item_name:
             update_query.setdefault("$addToSet", {})["inventory"] = new_item_name
         await db.users.update_one({"user_id": user_id}, update_query)
+
+async def trigger_verification(user_id):
+    # Unique 5-char random code
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    await db.users.update_one(
+        {"user_id": user_id}, 
+        {"$set": {"is_verifying": True, "captcha_code": code}}
+    )
+    return code
 
 async def is_admin(user_id):
     # Agar ye True return nahi kar raha, toh command nahi chalegi
