@@ -20,27 +20,33 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
     m = mode_str.split('_')
     scope, category, time_frame = m[0], m[1], m[2]
     
-    # 1. ALL TIME LOGIC (Directly from db.users)
+    # 1. ALL TIME LOGIC
     if time_frame == "all":
-        field = "crafted_count" if category == "craft" else "points"
+        # Agar scope chat hai, toh sirf us group ke points le rahe hain
         query = {"group_id": chat_id} if scope == "chat" and chat_id else {}
         
-        # Agar scope chat hai toh humein users ka group history check karna hoga
-        # Simple version: All time global hi sahi work karega
-        cursor = db.users.find({}).sort(field, -1).limit(10)
-        return await cursor.to_list(length=10)
+        # Aggregate use karenge taaki group ke points sum ho sakein
+        pipeline = [
+            {"$match": query},
+            {"$group": {"_id": "$user_id", "total": {"$sum": "$points" if category == "points" else "$crafted_count"}}},
+            {"$sort": {"total": -1}},
+            {"$limit": 10}
+        ]
+        return await db.craft_history.aggregate(pipeline).to_list(length=10)
 
-    # 2. TODAY LOGIC (From craft_history)
+    # 2. TODAY LOGIC
     else:
         start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         match_stage = {"crafted_at": {"$gte": start_date}}
         if scope == "chat" and chat_id:
             match_stage["group_id"] = chat_id
             
-        field = "points" if category == "points" else "points" # Assuming history has points
         pipeline = [
             {"$match": match_stage},
-            {"$group": {"_id": "$user_id", "total": {"$sum": "$points"}}},
+            {"$group": {
+                "_id": "$user_id", 
+                "total": {"$sum": "$points" if category == "points" else 1} # Craft count ke liye 1 add hoga
+            }},
             {"$sort": {"total": -1}},
             {"$limit": 10}
         ]
