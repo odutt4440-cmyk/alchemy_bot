@@ -20,38 +20,33 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
     m = mode_str.split('_')
     scope, category, time_frame = m[0], m[1], m[2]
     
-    # Logic wahi hai, bas result mein 'first_name' bhi include karenge
+    # 1. AGAR "ALL TIME" HAI: Seedha db.users se uthao (Fastest)
     if time_frame == "all":
-        query = {"group_id": chat_id} if scope == "chat" and chat_id else {}
-        pipeline = [
-            {"$match": query},
-            {"$group": {
-                "_id": "$user_id", 
-                "total": {"$sum": "$points" if category == "points" else 1}
-            }},
-            {"$sort": {"total": -1}},
-            {"$limit": 10}
-        ]
-        results = await db.craft_history.aggregate(pipeline).to_list(length=10)
+        field = "points" if category == "points" else "crafted_count"
+        # Sirf global support kar raha hoon (chat_id logic yahan zarurat nahi)
+        cursor = db.users.find({}).sort(field, -1).limit(10)
+        results = await cursor.to_list(length=10)
+        # Format map karo
+        return [{"_id": u["user_id"], "total": u.get(field, 0), "first_name": u.get("first_name", "Unknown")} for u in results]
+
+    # 2. AGAR "TODAY" HAI: craft_history use karo
     else:
         start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         match_stage = {"crafted_at": {"$gte": start_date}}
         if scope == "chat" and chat_id:
             match_stage["group_id"] = chat_id
+            
         pipeline = [
             {"$match": match_stage},
-            {"$group": {
-                "_id": "$user_id", 
-                "total": {"$sum": "$points" if category == "points" else 1}
-            }},
+            {"$group": {"_id": "$user_id", "total": {"$sum": "$points" if category == "points" else 1}}},
             {"$sort": {"total": -1}},
             {"$limit": 10}
         ]
         results = await db.craft_history.aggregate(pipeline).to_list(length=10)
-
-    # Yahan DB se naam fetch kar rahe hain
-    for entry in results:
-        user_info = await db.users.find_one({"user_id": entry["_id"]})
-        entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
         
-    return results
+        # Naam attach karo (Lookup optimization)
+        for entry in results:
+            user_info = await db.users.find_one({"user_id": entry["_id"]})
+            entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
+            
+        return results
