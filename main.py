@@ -363,8 +363,7 @@ async def craft_handler(event):
         await event.reply(CRAFT_FORMAT_MSG)
         return
     
-    # FIXED: title() use kiya taaki "black hole" -> "Black Hole" bane aur match sahi ho
-    item1_input, item2_input = args[0].title(), args[1].title()
+    item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
     user = await db.users.find_one({"user_id": event.sender_id})
     
     if not user:
@@ -393,10 +392,10 @@ async def craft_handler(event):
     # --- DEBUG LOGS END ---
     
     def find_item_in_inv(name, inv):
-        # FIXED: Exact match (case-insensitive) taki "Black" sirf "Black" ko match kare
+        name_lower = name.lower()
         for item in inv:
-            clean_item = item.lower().split(' ', 1)[-1] if ' ' in item else item.lower()
-            if name.lower() == item.lower() or name.lower() == clean_item:
+            # Emoji ignore karke match karega, baaki lines waisi hi hain
+            if name_lower == item.lower().split()[0].lower() or name_lower == item.lower():
                 return item 
         return None
 
@@ -408,8 +407,7 @@ async def craft_handler(event):
         await event.reply(f"❌ You don't have **{missing}**! Check your /inventory.")
         return
 
-    # FIXED: actual_item1/2 bhejo recipe check ke liye, input nahi
-    recipe = await get_recipe(actual_item1, actual_item2)
+    recipe = await get_recipe(item1_input, item2_input)
     
     if recipe:
         result_name_emoji = recipe['result']
