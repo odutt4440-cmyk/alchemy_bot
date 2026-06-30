@@ -113,6 +113,22 @@ async def welcome_handler(event):
     except Exception as e:
         print(f"Welcome handler error: {e}")
 
+# --- ADD THIS TO MAIN.PY ---
+
+@client.on(events.NewMessage(pattern='/sync', from_users=OWNER_ID))
+async def manual_sync(event):
+    await event.reply("🔄 **Syncing groups to database... Please wait.**")
+    count = 0
+    async for dialog in client.iter_dialogs():
+        if dialog.is_group or dialog.is_channel:
+            await db.groups.update_one(
+                {"id": dialog.id}, 
+                {"$set": {"active": True, "title": dialog.title}}, 
+                upsert=True
+            )
+            count += 1
+    await event.reply(f"✅ **Sync complete!** {count} groups have been added/updated in the database.")
+
 @client.on(events.NewMessage(pattern=r'(?i)/start'))
 async def start_handler(event):
     if await check_maintenance(event): return
