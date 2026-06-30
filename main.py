@@ -59,49 +59,50 @@ async def set_commands():
 
 @client.on(events.ChatAction)
 async def welcome_handler(event):
-    """Fixed: Single trigger for add, proper group logging, and welcome msg"""
+    """Fixed: Proper group tracking, logging, and welcome msg"""
     try:
         me = await client.get_me()
         
-        # 1. Sirf tab chalega agar BOT add hua hai
+        # 1. Bot add/join logic
         if event.user_added or event.user_joined:
             if any(user.id == me.id for user in event.users):
                 chat = await event.get_chat()
                 
-                # Check agar ye log already DB mein hai toh skip karo (duplicate prevent)
-                exists = await db.groups.find_one({"id": event.chat_id})
-                if exists: return 
+                # Check karo kya ye group pehle se active tha?
+                # Agar nahi tha, tabhi LOG_GC mein message bhejo (spam prevent)
+                group_data = await db.groups.find_one({"id": event.chat_id})
+                is_new_add = not group_data or not group_data.get("active")
 
-                # User ki info jisne add kiya
-                adder = await event.get_sender()
-                adder_name = f"{adder.first_name} {adder.last_name or ''}"
-                adder_uname = f"@{adder.username}" if adder.username else "None"
-                
-                # Group Link (Agar private hua toh None)
-                chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
-
-                # Log to LOG_GC
-                await client.send_message(
-                    LOG_GC_ID, 
-                    f"🤖 **Bot Added to Group**\n\n"
-                    f"🏢 **Group:** {chat.title}\n"
-                    f"🆔 **GC ID:** `{event.chat_id}`\n"
-                    f"🔗 **Link:** {chat_link}\n\n"
-                    f"👤 **Added By:** {adder_name}\n"
-                    f"📛 **Username:** `{adder_uname}`\n"
-                    f"🆔 **User ID:** `{adder.id}`"
+                # Save/Update to DB (Active status)
+                await db.groups.update_one(
+                    {"id": event.chat_id}, 
+                    {"$set": {"active": True, "title": chat.title}}, 
+                    upsert=True
                 )
-                
-                # Save to DB (Active status)
-                await db.groups.update_one({"id": event.chat_id}, {"$set": {"active": True, "title": chat.title}}, upsert=True)
 
+                # Sirf tabhi log karo agar ye naya add hai ya wapas join kiya hai
+                if is_new_add:
+                    adder = await event.get_sender()
+                    adder_name = f"{adder.first_name} {adder.last_name or ''}"
+                    adder_uname = f"@{adder.username}" if adder.username else "None"
+                    chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
+
+                    await client.send_message(
+                        LOG_GC_ID, 
+                        f"🤖 **Bot Added to Group**\n\n"
+                        f"🏢 **Group:** {chat.title}\n"
+                        f"🆔 **GC ID:** `{event.chat_id}`\n"
+                        f"🔗 **Link:** {chat_link}\n\n"
+                        f"👤 **Added By:** {adder_name}\n"
+                        f"📛 **Username:** `{adder_uname}`\n"
+                        f"🆔 **User ID:** `{adder.id}`"
+                    )
+                
                 # Welcome Message Logic
-                file_path = START_IMAGE
-                # Fix: Cast to int to compare IDs correctly
                 msg = OFFICIAL_WELCOME_MSG if int(event.chat_id) == int(OFFICIAL_GC_ID) else OTHER_GROUP_MSG
                 
-                if os.path.exists(file_path):
-                    await client.send_file(event.chat_id, file_path, caption=msg)
+                if os.path.exists(START_IMAGE):
+                    await client.send_file(event.chat_id, START_IMAGE, caption=msg)
                 else:
                     await event.reply(msg)
 
@@ -113,21 +114,17 @@ async def welcome_handler(event):
     except Exception as e:
         print(f"Welcome handler error: {e}")
 
-# --- ADD THIS TO MAIN.PY ---
+@client.on(events.NewMessage)
+async def group_tracker(event):
+    if event.is_group:
+        # Har command chalne par group ko active mark kar do
+        chat = await event.get_chat()
+        await db.groups.update_one(
+            {"id": event.chat_id}, 
+            {"$set": {"id": event.chat_id, "title": chat.title, "active": True}}, 
+            upsert=True
+        )
 
-@client.on(events.NewMessage(pattern='/sync', from_users=OWNER_ID))
-async def manual_sync(event):
-    await event.reply("🔄 **Syncing groups to database... Please wait.**")
-    count = 0
-    async for dialog in client.iter_dialogs():
-        if dialog.is_group or dialog.is_channel:
-            await db.groups.update_one(
-                {"id": dialog.id}, 
-                {"$set": {"active": True, "title": dialog.title}}, 
-                upsert=True
-            )
-            count += 1
-    await event.reply(f"✅ **Sync complete!** {count} groups have been added/updated in the database.")
 
 @client.on(events.NewMessage(pattern=r'(?i)/start'))
 async def start_handler(event):
