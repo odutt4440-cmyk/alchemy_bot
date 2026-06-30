@@ -356,10 +356,12 @@ async def craft_handler(event):
         await event.reply("🚫 **Access Blocked!**\nAdmin has sent a verification captcha to your DM. Check it! Using commands now confirms you are using a script.")
         return
     text = event.pattern_match.group(2)
-    args = text.split()
+    
+    # FIXED: Split by '+' instead of space to handle multi-word items
+    args = [x.strip() for x in text.split('+')]
     
     if len(args) < 2:
-        await event.reply(CRAFT_FORMAT_MSG)
+        await event.reply("❌ **Format Error!**\nSahi format: `/c Item1 + Item2`")
         return
     
     item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
@@ -392,7 +394,7 @@ async def craft_handler(event):
     
     def find_item_in_inv(name, inv):
         for item in inv:
-            if name.lower() in item.lower():
+            if name.lower() == item.lower(): # Strict match for exact item names
                 return item 
         return None
 
@@ -404,7 +406,7 @@ async def craft_handler(event):
         await event.reply(f"❌ You don't have **{missing}**! Check your /inventory.")
         return
 
-    recipe = await get_recipe(item1_input, item2_input)
+    recipe = await get_recipe(actual_item1, actual_item2)
     
     if recipe:
         result_name_emoji = recipe['result']
