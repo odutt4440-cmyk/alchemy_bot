@@ -119,14 +119,15 @@ async def can_craft(user_id):
     
     return (now - last_time).total_seconds() >= COOLDOWN_SECONDS
 
-async def add_craft_point(user_id, new_item_name=None, points=None, coins=None, group_id=None):
+async def add_craft_point(user_id, first_name=None, new_item_name=None, points=None, coins=None, group_id=None):
     points = points if points is not None else CRAFT_POINTS
-    coins = coins if coins is not None else CRAFT_COINS # config se import karna
+    coins = coins if coins is not None else CRAFT_COINS
     now = datetime.datetime.now(datetime.timezone.utc)
     
     # 1. History log for Leaderboard (Daily/Today stats)
     await db.craft_history.insert_one({
         "user_id": user_id,
+        "first_name": first_name, # History mein bhi naam save kar rahe hain
         "points": points,
         "crafted_at": now,
         "group_id": group_id
@@ -137,6 +138,7 @@ async def add_craft_point(user_id, new_item_name=None, points=None, coins=None, 
     if not user:
         await db.users.insert_one({
             "user_id": user_id,
+            "first_name": first_name, # Naya user, naam save karo
             "points": points,
             "coins": coins,
             "crafted_count": 1,
@@ -150,6 +152,10 @@ async def add_craft_point(user_id, new_item_name=None, points=None, coins=None, 
             "$inc": {"points": points, "coins": coins, "crafted_count": 1},
             "$set": {"last_craft_time": now}
         }
+        # Agar first_name aaya hai toh update karo
+        if first_name:
+            update_query["$set"]["first_name"] = first_name
+            
         if "inventory" not in user or not user["inventory"]:
             update_query.setdefault("$set", {})["inventory"] = INITIAL_ITEMS
         if new_item_name:
