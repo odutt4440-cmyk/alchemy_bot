@@ -141,7 +141,6 @@ async def broadcast_init(event):
     ]
     await event.reply("Select where to broadcast:", buttons=btns)
 
-# Step 2: Callback Processor
 @events.register(events.CallbackQuery(data=lambda d: d.startswith(b'bc_')))
 async def bc_callback(event):
     if not await is_admin(event.sender_id): return
@@ -152,14 +151,31 @@ async def bc_callback(event):
         return
             
     await event.edit(f"🚀 Broadcasting via {action.upper()}...")
-    users = await db.users.find({}).to_list(length=None)
-        
+    
+    # 1. DM Broadcast (Users)
     if action in ["dm", "all"]:
+        users = await db.users.find({}).to_list(length=None)
         for u in users:
-            try: await event.client.send_message(u['user_id'], BROADCAST_TEXT)
-            except: continue
+            try: 
+                await event.client.send_message(u['user_id'], BROADCAST_TEXT)
+            except Exception: 
+                continue # Agar user ne bot block kiya ho toh skip karo
+
+    # 2. GC Broadcast (Groups)
     if action in ["gc", "all"]:
-        await event.client.send_message(LOG_GC_ID, f"📢 **Broadcast:**\n{BROADCAST_TEXT}")
+        # DB se sirf 'active' groups uthao
+        active_groups = await db.groups.find({"active": True}).to_list(length=None)
+        
+        for g in active_groups:
+            try:
+                await event.client.send_message(g['id'], BROADCAST_TEXT)
+            except Exception as e:
+                # Agar bot group se remove ho gaya hai, toh DB mein active: False kar do
+                print(f"Failed to send to {g['id']}: {e}")
+                await db.groups.update_one({"id": g['id']}, {"$set": {"active": False}})
+        
+        # Log update
+        await event.client.send_message(LOG_GC_ID, f"📢 **Broadcast Sent:**\n{BROADCAST_TEXT}")
         
     await event.edit("✅ Broadcast Completed!")
     # 6. Stats & Info
