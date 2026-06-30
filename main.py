@@ -403,7 +403,7 @@ async def craft_handler(event):
             item1, item2 = cand1, cand2
             break
 
-    print(f"DEBUG [User: {user_id}]: Input: {raw_text} | Inventory Size: {len(inventory)}")
+    print(f"DEBUG [User: {uid}]: Input: {raw_text} | Inventory Size: {len(inventory)}")
             
     if not item1 or not item2:
         # Professional English quote with the error message
