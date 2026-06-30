@@ -401,16 +401,13 @@ async def craft_handler(event):
 async def lb_cmd(event):
     if await check_maintenance(event): return
     
-    # Default initial state: Global, Most Points, Today
     initial_mode = "global_points_today"
-    
-    # Data fetch karo
     data = await fetch_leaderboard_data(initial_mode, chat_id=event.chat_id if event.is_group else None)
     
-    # Message format karo
     text = "🏆 **Alchemist Leaderboard (Today)**\n\n"
     for i, user in enumerate(data, 1):
-        text += f"{i}. User ID: `{user['_id']}` - {user['total']} pts\n"
+        # Yahan .get('total', 0) use kiya hai taaki crash na ho
+        text += f"{i}. User ID: `{user['_id']}` - {user.get('total', 0)} pts\n"
         
     btns = await get_lb_markup(initial_mode)
     await event.reply(text, buttons=btns)
@@ -418,23 +415,21 @@ async def lb_cmd(event):
 @client.on(events.CallbackQuery(pattern=b"lb_|refresh_"))
 async def lb_callback(event):
     data = event.data.decode()
-    
-    # Agar refresh button click hua, toh wahi mode wapas use karo
-    if data.startswith("refresh_"):
-        mode = data.replace("refresh_", "")
-    else:
-        mode = data.replace("lb_", "")
+    mode = data.replace("refresh_", "").replace("lb_", "")
         
-    # Data fetch karo
     chat_id = event.chat_id if "chat" in mode else None
     leaderboard_data = await fetch_leaderboard_data(mode, chat_id=chat_id)
     
-    # Message update karo
-    text = f"🏆 **Alchemist Leaderboard ({mode.split('_')[2].upper()})**\n\n"
-    for i, user in enumerate(leaderboard_data, 1):
-        text += f"{i}. User ID: `{user['_id']}` - {user['total']} pts\n"
+    # Mode split karke time frame nikal lo
+    time_frame = mode.split('_')[2].upper()
+    text = f"🏆 **Alchemist Leaderboard ({time_frame})**\n\n"
     
-    # Buttons update karo
+    for i, user in enumerate(leaderboard_data, 1):
+        # Agar 'all' time data hai toh 'points' ya 'crafted_count' handle karo, 
+        # aur agar 'total' key missing hai toh 0 dikhao.
+        val = user.get('total') or user.get('points') or user.get('crafted_count') or 0
+        text += f"{i}. User ID: `{user['_id']}` - {val} pts\n"
+    
     btns = await get_lb_markup(mode)
     
     await event.edit(text, buttons=btns)
