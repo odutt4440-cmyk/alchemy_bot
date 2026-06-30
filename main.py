@@ -19,7 +19,7 @@ from config import (
 # Admin imports
 from admin import (
     is_admin, sudohelp, addsudo, power_callback, coins_cmd, 
-    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem, inspect_toggle, send_captcha, inspection_mode
+    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem, inspect_user, send_captcha, inspection_mode
 )
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
