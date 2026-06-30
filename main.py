@@ -375,9 +375,19 @@ async def craft_handler(event):
 
     def match_item(input_str, inv):
         search = get_clean_name(input_str)
+        
+        # 1. First Pass: Exact Match (Jo tumhara abhi ka logic hai)
         for item in inv:
             if search == get_clean_name(item):
                 return item
+        
+        # 2. Second Pass: Fallback for Numbers (Agar exact nahi mila, toh check karo startwith)
+        # Ye sirf tab chalega agar exact match fail ho gaya, toh tumhare purane items secure hain!
+        if search.isdigit(): 
+            for item in inv:
+                if get_clean_name(item).startswith(search + " "):
+                    return item
+                    
         return None
 
     # Splitting logic
@@ -392,7 +402,14 @@ async def craft_handler(event):
             break
             
     if not item1 or not item2:
-        await event.reply(f"❌ **Format Error!**\nInput received: `{raw_text}`\nUse: `/c Item1 Item2`")
+        # Professional English quote with the error message
+        error_quote = "The path of the alchemist is paved with the unknown. Seek deeper into your collection to find what is missing."
+        await event.reply(
+            f"❌ **Not in Inventory!**\n\n"
+            f"Element `{missing_item or raw_text}` is not found in your inventory.\n\n"
+            f"_{error_quote}_\n\n"
+            f"Use /inventory to check your collected elements."
+        )
         return
 
     print(f"DEBUG: Crafting: {item1} + {item2}")
