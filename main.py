@@ -356,16 +356,14 @@ async def craft_handler(event):
         await event.reply("🚫 **Access Blocked!**\nAdmin has sent a verification captcha to your DM. Check it! Using commands now confirms you are using a script.")
         return
     text = event.pattern_match.group(2)
-    
-    # FIXED: Split by '+' instead of space to handle multi-word items, support underscore
-    text = text.replace('_', ' ')
-    args = [x.strip() for x in text.split('+')]
+    # FIXED: Underscore ko handle karne ke liye replace lagaya
+    args = text.replace('_', ' ').split()
     
     if len(args) < 2:
-        await event.reply("❌ **Format Error!**\nSahi format: `/c Item1 + Item2`")
+        await event.reply(CRAFT_FORMAT_MSG)
         return
     
-    item1_input, item2_input = args[0], args[1]
+    item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
     user = await db.users.find_one({"user_id": event.sender_id})
     
     if not user:
@@ -395,7 +393,6 @@ async def craft_handler(event):
     
     def find_item_in_inv(name, inv):
         for item in inv:
-            # FIXED: Flexible match (case-insensitive) for emojis and names
             if name.lower() in item.lower():
                 return item 
         return None
@@ -408,7 +405,7 @@ async def craft_handler(event):
         await event.reply(f"❌ You don't have **{missing}**! Check your /inventory.")
         return
 
-    recipe = await get_recipe(actual_item1, actual_item2)
+    recipe = await get_recipe(item1_input, item2_input)
     
     if recipe:
         result_name_emoji = recipe['result']
@@ -434,6 +431,7 @@ async def craft_handler(event):
         await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS} | Coins: +{CRAFT_COINS}")
     else:
         await event.reply(NOTHING_MSG)
+        
 @client.on(events.NewMessage(pattern=r'(?i)/(lb|leaderboard)'))
 async def lb_cmd(event):
     if await check_maintenance(event): return
