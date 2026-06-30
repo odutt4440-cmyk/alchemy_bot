@@ -472,8 +472,7 @@ async def craft_handler(event):
 
 
 
-    recipe = await get_recipe(actual_item1, actual_item2)
-
+    recipe = await get_recipe(item1_input.capitalize(), item2_input.capitalize())
     
 
     if recipe:
