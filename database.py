@@ -65,28 +65,37 @@ def _get_sqlite_conn():
     return _sqlite_conn
 
 # ===== GAME DATA LOOKUP (SQLite) =====
+import re
+
 async def get_recipe(item1_name, item2_name):
+    # Emojis aur special characters hatane ke liye helper
+    def clean(text):
+        return re.sub(r'[^\w\s]', '', text).strip().lower()
+
     try:
         conn = _get_sqlite_conn()
         c = conn.cursor()
         
+        # Cleaned names use karo
+        c1, c2 = clean(item1_name), clean(item2_name)
+        
+        # Query: Note ki humne database ke columns pe clean apply nahi kiya, 
+        # balki input ko database ke format se match kar rahe hain
         c.execute("""
             SELECT result, result_emoji FROM recipes 
-            WHERE LOWER(first) = LOWER(?) AND LOWER(second) = LOWER(?)
-        """, (item1_name, item2_name))
-        
+            WHERE LOWER(first) = ? AND LOWER(second) = ?
+        """, (c1, c2))
         row = c.fetchone()
         
         if not row:
             c.execute("""
                 SELECT result, result_emoji FROM recipes 
-                WHERE LOWER(first) = LOWER(?) AND LOWER(second) = LOWER(?)
-            """, (item2_name, item1_name))
+                WHERE LOWER(first) = ? AND LOWER(second) = ?
+            """, (c2, c1))
             row = c.fetchone()
         
         if row:
             return {"result": f"{row[0]} {row[1]}", "emoji": row[1]}
-        
         return None
     except Exception as e:
         print(f"❌ get_recipe error: {e}")
@@ -94,9 +103,14 @@ async def get_recipe(item1_name, item2_name):
 
 async def get_item_name(item_name):
     try:
+        def clean(text):
+            return re.sub(r'[^\w\s]', '', text).strip().lower()
+
         conn = _get_sqlite_conn()
         c = conn.cursor()
-        c.execute("SELECT name, emoji FROM elements WHERE LOWER(name) = LOWER(?)", (item_name,))
+        
+        # Cleaned input se search karo
+        c.execute("SELECT name, emoji FROM elements WHERE LOWER(name) = ?", (clean(item_name),))
         row = c.fetchone()
         
         if row:
