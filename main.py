@@ -388,6 +388,7 @@ async def craft_handler(event):
             
         await add_craft_point(
             event.sender_id, 
+            first_name=(await event.get_sender()).first_name,
             new_item_name=result_name_emoji, 
             points=CRAFT_POINTS, 
             coins=CRAFT_COINS,
@@ -424,13 +425,8 @@ async def lb_callback(event):
     text = f"🏆 **Alchemist Leaderboard ({parts[0].upper()} - {parts[2].upper()})**\n\n"
     
     for i, user in enumerate(leaderboard_data, 1):
-        u_id = user['_id']
-        # Name fetch logic
-        try:
-            user_obj = await client.get_entity(int(u_id))
-            name = user_obj.first_name
-        except:
-            name = f"User {str(u_id)[-4:]}"
+        # Database mein save kiya hua naam use karo (jo humne Step 2 mein kiya tha)
+        name = user.get("first_name", "Unknown")
             
         val = user.get('total', 0)
         text += f"{i}. {name} — {val} {'pts' if 'points' in mode else 'crafts'}\n"
