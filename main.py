@@ -337,96 +337,191 @@ async def craft_empty_handler(event):
     await event.reply(CRAFT_EMPTY_MSG)
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s+(.*)'))
+
 async def craft_handler(event):
+
     if await check_maintenance(event): return
+
     if inspection_mode.get(event.sender_id, False):
+
         user = await db.users.find_one({"user_id": event.sender_id})
+
         last_time = user.get("last_craft_time")
+
         
+
+        # Simple Logic: Agar craft time bahut tight hai (e.g., < 1.8s), flag it
+
         import datetime
+
         if last_time and (datetime.datetime.now() - last_time).total_seconds() < 1.8:
+
             await client.send_message(LOG_GC_ID, f"🕵️ **Forensic Alert:** User `{event.sender_id}` is under inspection.\nAnalysis: **Suspiciously rapid timing detected!**")
 
-    user = await db.users.find_one({"user_id": event.sender_id})
-    if user and user.get("is_verifying"):
-        await client.send_message(LOG_GC_ID, f"🚨 **Busted!** User `{event.sender_id}` attempted `/craft` command even after captcha was sent.\nEvidence: **Script activity confirmed.**")
-        await event.reply("🚫 **Access Blocked!**\nAdmin has sent a verification captcha to your DM. Check it! Using commands now confirms you are using a script.")
-        return
-    
-    text = event.pattern_match.group(2).replace('_', ' ')
-    
-    # Logic: Inventory mein maujood items se match karne ke liye words ko group karna
-    # Hum items ko inventory se fetch karke match karenge
-    inventory = user.get("inventory", []) if user else []
-    
-    # Item dhoondne ka naya smart logic
-    def get_items_from_text(text, inv):
-        found = []
-        # Inventory items ko length ke hisaab se sort karo (bade items pehle)
-        sorted_inv = sorted(inv, key=lambda x: len(x), reverse=True)
-        temp_text = text.lower()
-        for item in sorted_inv:
-            clean_item = item.split()[0].lower() if not item[0].isalpha() else item.lower()
-            if clean_item in temp_text:
-                found.append(item)
-                temp_text = temp_text.replace(clean_item, "", 1)
-                if len(found) == 2: break
-        return found if len(found) == 2 else [None, None]
 
-    actual_item1, actual_item2 = get_items_from_text(text, inventory)
+
+    # 2. Captcha Trap (If Captcha is pending)
+
+    user = await db.users.find_one({"user_id": event.sender_id})
+
+    if user and user.get("is_verifying"):
+
+        # Log evidence to GC
+
+        await client.send_message(LOG_GC_ID, f"🚨 **Busted!** User `{event.sender_id}` attempted `/craft` command even after captcha was sent.\nEvidence: **Script activity confirmed.**")
+
+        await event.reply("🚫 **Access Blocked!**\nAdmin has sent a verification captcha to your DM. Check it! Using commands now confirms you are using a script.")
+
+        return
+
+    text = event.pattern_match.group(2)
+
+    args = text.split()
+
     
-    if not actual_item1 or not actual_item2:
+
+    if len(args) < 2:
+
         await event.reply(CRAFT_FORMAT_MSG)
+
         return
+
     
-    item1_input, item2_input = actual_item1, actual_item2
+
+    item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
+
+    user = await db.users.find_one({"user_id": event.sender_id})
+
     
+
     if not user:
+
         if event.is_group:
+
             await event.reply(DM_FIRST_MSG)
+
             return
+
         else:
+
             await db.users.insert_one({
+
                 "user_id": event.sender_id,
+
                 "points": 0,
+
                 "crafted_count": 0,
+
                 "last_craft_time": None,
+
                 "inventory": INITIAL_ITEMS
+
             })
+
             user = await db.users.find_one({"user_id": event.sender_id})
+
     
+
     if not await can_craft(event.sender_id):
+
         await event.reply(SLOW_DOWN_MSG)
+
         return
+
+
+
+    inventory = user.get("inventory", []) if user else []
+
+    
 
     # --- DEBUG LOGS START ---
+
     print(f"DEBUG: User ID: {event.sender_id} | Crafting: {item1_input} + {item2_input}")
+
     print(f"DEBUG: Inventory items count: {len(inventory)}")
+
     # --- DEBUG LOGS END ---
+
     
-    recipe = await get_recipe(item1_input.split()[0], item2_input.split()[0])
+
+    def find_item_in_inv(name, inv):
+
+        for item in inv:
+
+            if name.lower() in item.lower():
+
+                return item 
+
+        return None
+
+
+
+    actual_item1 = find_item_in_inv(item1_input, inventory)
+
+    actual_item2 = find_item_in_inv(item2_input, inventory)
+
     
+
+    if not actual_item1 or not actual_item2:
+
+        missing = item1_input if not actual_item1 else item2_input
+
+        await event.reply(f"❌ You don't have **{missing}**! Check your /inventory.")
+
+        return
+
+
+
+    recipe = await get_recipe(actual_item1, actual_item2)
+
+    
+
     if recipe:
+
         result_name_emoji = recipe['result']
-        is_already_in = any(result_name_emoji.lower() == item.lower() for item in inventory)
+
         
+
+        # --- DEBUG LOGS START ---
+
+        is_already_in = any(result_name_emoji.lower() == item.lower() for item in inventory)
+
         print(f"DEBUG: Recipe Result: {result_name_emoji}")
+
         print(f"DEBUG: Already exists in inventory? {is_already_in}")
 
+        # --- DEBUG LOGS END ---
+
+
+
         if is_already_in:
+
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
+
             return
+
             
+
         await add_craft_point(
+
             event.sender_id, 
+
             first_name=(await event.get_sender()).first_name,
+
             new_item_name=result_name_emoji, 
+
             points=CRAFT_POINTS, 
+
             coins=CRAFT_COINS,
+
             group_id=event.chat_id
+
         )
+
         await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS} | Coins: +{CRAFT_COINS}")
+
     else:
+
         await event.reply(NOTHING_MSG)
         
 @client.on(events.NewMessage(pattern=r'(?i)/(lb|leaderboard)'))
