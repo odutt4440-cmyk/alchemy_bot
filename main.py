@@ -393,6 +393,7 @@ async def craft_handler(event):
     # Splitting logic
     parts = raw_text.replace("+", " ").split()
     item1, item2 = None, None
+    missing_item = None
 
     for i in range(1, len(parts)):
         cand1 = match_item(" ".join(parts[:i]), inventory)
