@@ -357,14 +357,15 @@ async def craft_handler(event):
         return
     text = event.pattern_match.group(2)
     
-    # FIXED: Split by '+' instead of space to handle multi-word items
+    # FIXED: Split by '+' instead of space to handle multi-word items, support underscore
+    text = text.replace('_', ' ')
     args = [x.strip() for x in text.split('+')]
     
     if len(args) < 2:
         await event.reply("❌ **Format Error!**\nSahi format: `/c Item1 + Item2`")
         return
     
-    item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
+    item1_input, item2_input = args[0], args[1]
     user = await db.users.find_one({"user_id": event.sender_id})
     
     if not user:
@@ -394,7 +395,8 @@ async def craft_handler(event):
     
     def find_item_in_inv(name, inv):
         for item in inv:
-            if name.lower() == item.lower(): # Strict match for exact item names
+            # FIXED: Flexible match (case-insensitive) for emojis and names
+            if name.lower() in item.lower():
                 return item 
         return None
 
@@ -432,7 +434,6 @@ async def craft_handler(event):
         await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS} | Coins: +{CRAFT_COINS}")
     else:
         await event.reply(NOTHING_MSG)
-
 @client.on(events.NewMessage(pattern=r'(?i)/(lb|leaderboard)'))
 async def lb_cmd(event):
     if await check_maintenance(event): return
