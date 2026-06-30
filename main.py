@@ -343,28 +343,43 @@ async def craft_handler(event):
         user = await db.users.find_one({"user_id": event.sender_id})
         last_time = user.get("last_craft_time")
         
-        # Simple Logic: Agar craft time bahut tight hai (e.g., < 1.8s), flag it
         import datetime
         if last_time and (datetime.datetime.now() - last_time).total_seconds() < 1.8:
             await client.send_message(LOG_GC_ID, f"🕵️ **Forensic Alert:** User `{event.sender_id}` is under inspection.\nAnalysis: **Suspiciously rapid timing detected!**")
 
-    # 2. Captcha Trap (If Captcha is pending)
     user = await db.users.find_one({"user_id": event.sender_id})
     if user and user.get("is_verifying"):
-        # Log evidence to GC
         await client.send_message(LOG_GC_ID, f"🚨 **Busted!** User `{event.sender_id}` attempted `/craft` command even after captcha was sent.\nEvidence: **Script activity confirmed.**")
         await event.reply("🚫 **Access Blocked!**\nAdmin has sent a verification captcha to your DM. Check it! Using commands now confirms you are using a script.")
         return
-    text = event.pattern_match.group(2)
-    # FIXED: Underscore ko handle karne ke liye replace lagaya
-    args = text.replace('_', ' ').split()
     
-    if len(args) < 2:
+    text = event.pattern_match.group(2).replace('_', ' ')
+    
+    # Logic: Inventory mein maujood items se match karne ke liye words ko group karna
+    # Hum items ko inventory se fetch karke match karenge
+    inventory = user.get("inventory", []) if user else []
+    
+    # Item dhoondne ka naya smart logic
+    def get_items_from_text(text, inv):
+        found = []
+        # Inventory items ko length ke hisaab se sort karo (bade items pehle)
+        sorted_inv = sorted(inv, key=lambda x: len(x), reverse=True)
+        temp_text = text.lower()
+        for item in sorted_inv:
+            clean_item = item.split()[0].lower() if not item[0].isalpha() else item.lower()
+            if clean_item in temp_text:
+                found.append(item)
+                temp_text = temp_text.replace(clean_item, "", 1)
+                if len(found) == 2: break
+        return found if len(found) == 2 else [None, None]
+
+    actual_item1, actual_item2 = get_items_from_text(text, inventory)
+    
+    if not actual_item1 or not actual_item2:
         await event.reply(CRAFT_FORMAT_MSG)
         return
     
-    item1_input, item2_input = args[0].capitalize(), args[1].capitalize()
-    user = await db.users.find_one({"user_id": event.sender_id})
+    item1_input, item2_input = actual_item1, actual_item2
     
     if not user:
         if event.is_group:
@@ -384,39 +399,19 @@ async def craft_handler(event):
         await event.reply(SLOW_DOWN_MSG)
         return
 
-    inventory = user.get("inventory", []) if user else []
-    
     # --- DEBUG LOGS START ---
     print(f"DEBUG: User ID: {event.sender_id} | Crafting: {item1_input} + {item2_input}")
     print(f"DEBUG: Inventory items count: {len(inventory)}")
     # --- DEBUG LOGS END ---
     
-    def find_item_in_inv(name, inv):
-        name_lower = name.lower()
-        for item in inv:
-            # Emoji ignore karke match karega, baaki lines waisi hi hain
-            if name_lower == item.lower().split()[0].lower() or name_lower == item.lower():
-                return item 
-        return None
-
-    actual_item1 = find_item_in_inv(item1_input, inventory)
-    actual_item2 = find_item_in_inv(item2_input, inventory)
-    
-    if not actual_item1 or not actual_item2:
-        missing = item1_input if not actual_item1 else item2_input
-        await event.reply(f"❌ You don't have **{missing}**! Check your /inventory.")
-        return
-
-    recipe = await get_recipe(item1_input, item2_input)
+    recipe = await get_recipe(item1_input.split()[0], item2_input.split()[0])
     
     if recipe:
         result_name_emoji = recipe['result']
-        
-        # --- DEBUG LOGS START ---
         is_already_in = any(result_name_emoji.lower() == item.lower() for item in inventory)
+        
         print(f"DEBUG: Recipe Result: {result_name_emoji}")
         print(f"DEBUG: Already exists in inventory? {is_already_in}")
-        # --- DEBUG LOGS END ---
 
         if is_already_in:
             await event.reply(f"♻️ You have already crafted **{result_name_emoji}**!")
