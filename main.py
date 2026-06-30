@@ -401,6 +401,8 @@ async def craft_handler(event):
         if cand1 and cand2:
             item1, item2 = cand1, cand2
             break
+
+    print(f"DEBUG [User: {user_id}]: Input: {raw_text} | Inventory Size: {len(inventory)}")
             
     if not item1 or not item2:
         # Professional English quote with the error message
