@@ -5,7 +5,7 @@ from telethon.tl.functions.bots import SetBotCommandsRequest
 from database import can_craft, add_craft_point, db, get_recipe
 from config import (
     API_ID, API_HASH, BOT_TOKEN, BOT_USERNAME,
-    OFFICIAL_GC_ID, LOG_GC_ID,
+    OFFICIAL_GC_ID, LOG_GC_ID, OWNER_ID,
     DEV_URL, HELP_URL, GC_URL, CHANNEL_URL,
     CRAFT_COINS,
     CRAFT_POINTS, INITIAL_ITEMS,
