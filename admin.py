@@ -1,7 +1,9 @@
 from telethon import events, Button
 from database import db, is_admin
 from config import LOG_GC_ID, OWNER_ID
+import random, string
 
+inspection_mode = {}
 
 @events.register(events.NewMessage(pattern=r'/maintenance (on|off)(.*)'))
 async def maintenance_mode(event):
@@ -263,22 +265,24 @@ async def give_redeem(event):
     except Exception as e:
         await event.reply(f"❌ Failed to send: {e}")
 
-# admin.py
 @events.register(events.NewMessage(pattern=r'/inspect\s+(\d+)'))
 async def inspect_user(event):
     if not await is_admin(event.sender_id): return
     target_id = int(event.pattern_match.group(1))
     
-    history = await db.craft_history.find({"user_id": target_id}).sort("crafted_at", -1).limit(5).to_list(None)
-    if not history: return await event.reply("No history.")
+    # Toggle logic
+    inspection_mode[target_id] = not inspection_mode.get(target_id, False)
+    status = "ON" if inspection_mode[target_id] else "OFF"
     
-    intervals = [(history[i]['crafted_at'] - history[i+1]['crafted_at']).total_seconds() for i in range(len(history)-1)]
-    avg = sum(intervals)/len(intervals) if intervals else 0
+    await event.reply(f"🔍 **Inspection Mode** for `{target_id}` is now **{status}**.")
+
+@events.register(events.NewMessage(pattern=r'/captcha\s+(\d+)'))
+async def send_captcha(event):
+    if not await is_admin(event.sender_id): return
+    target_id = int(event.pattern_match.group(1))
     
-    status = "✅ NORMAL"
-    if avg < 2.5: # 2.5s se kam ka avg suspicious hai
-        status = "⚠️ SUSPICIOUS - BOT LIKELY"
-        # Log to GC
-        await client.send_message(LOG_GC_ID, f"🚨 **Suspicious Activity Alert**\nUser: `{target_id}`\nAvg Interval: `{avg:.2f}s`\nStatus: {status}")
-        
-    await event.reply(f"🔍 Inspection for {target_id}\nAvg Speed: `{avg:.2f}s`\nResult: {status}")
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+    await db.users.update_one({"user_id": target_id}, {"$set": {"is_verifying": True, "captcha_code": code}})
+    
+    await event.client.send_message(target_id, f"⚠️ **Security Verification**\n\nAdmin has flagged your activity. Reply with this code to verify: `{code}`.\n\nValid for 5 minutes. Failure to verify will result in a **PERMANENT BAN**.")
+    await event.reply(f"✅ Captcha sent to `{target_id}`. Waiting for user response...")
