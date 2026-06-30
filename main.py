@@ -47,6 +47,7 @@ async def set_commands():
         types.BotCommand("craft", "Start crafting (Ex: /craft Fire Water)"),
         types.BotCommand("points", "Check your current points"),
         types.BotCommand("inventory", "View your discovered elements"),
+        types.BotCommand("leaderboard", "Check global/chat leaderboard"),
         types.BotCommand("redeem", "Redeem Rewards through this command"),
         types.BotCommand("help", "Get help and support")
     ]
@@ -422,14 +423,18 @@ async def lb_callback(event):
     leaderboard_data = await fetch_leaderboard_data(mode, chat_id=chat_id)
     
     parts = mode.split('_')
-    text = f"🏆 **Alchemist Leaderboard ({parts[0].upper()} - {parts[2].upper()})**\n\n"
+    # Parts: 0=scope(global/chat), 1=category(craft/points), 2=time(today/all)
+    header = f"🏆 **Alchemist Leaderboard ({parts[0].upper()} — {parts[2].upper()})**"
     
-    for i, user in enumerate(leaderboard_data, 1):
-        # Database mein save kiya hua naam use karo (jo humne Step 2 mein kiya tha)
-        name = user.get("first_name", "Unknown")
-            
-        val = user.get('total', 0)
-        text += f"{i}. {name} — {val} {'pts' if 'points' in mode else 'crafts'}\n"
+    if not leaderboard_data:
+        text = f"{header}\n\nNo records found yet!"
+    else:
+        text = f"{header}\n\n"
+        for i, user in enumerate(leaderboard_data, 1):
+            name = user.get("first_name", "Unknown")
+            val = user.get('total', 0)
+            unit = 'pts' if 'points' in mode else 'crafts'
+            text += f"{i}. {name} — {val} {unit}\n"
     
     btns = await get_lb_markup(mode)
     await event.edit(text, buttons=btns)
