@@ -20,34 +20,38 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
     m = mode_str.split('_')
     scope, category, time_frame = m[0], m[1], m[2]
     
-    # 1. ALL TIME LOGIC
+    # Logic wahi hai, bas result mein 'first_name' bhi include karenge
     if time_frame == "all":
-        # Agar scope chat hai, toh sirf us group ke points le rahe hain
         query = {"group_id": chat_id} if scope == "chat" and chat_id else {}
-        
-        # Aggregate use karenge taaki group ke points sum ho sakein
         pipeline = [
             {"$match": query},
-            {"$group": {"_id": "$user_id", "total": {"$sum": "$points" if category == "points" else "$crafted_count"}}},
+            {"$group": {
+                "_id": "$user_id", 
+                "total": {"$sum": "$points" if category == "points" else 1}
+            }},
             {"$sort": {"total": -1}},
             {"$limit": 10}
         ]
-        return await db.craft_history.aggregate(pipeline).to_list(length=10)
-
-    # 2. TODAY LOGIC
+        results = await db.craft_history.aggregate(pipeline).to_list(length=10)
     else:
         start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         match_stage = {"crafted_at": {"$gte": start_date}}
         if scope == "chat" and chat_id:
             match_stage["group_id"] = chat_id
-            
         pipeline = [
             {"$match": match_stage},
             {"$group": {
                 "_id": "$user_id", 
-                "total": {"$sum": "$points" if category == "points" else 1} # Craft count ke liye 1 add hoga
+                "total": {"$sum": "$points" if category == "points" else 1}
             }},
             {"$sort": {"total": -1}},
             {"$limit": 10}
         ]
-        return await db.craft_history.aggregate(pipeline).to_list(length=10)
+        results = await db.craft_history.aggregate(pipeline).to_list(length=10)
+
+    # Yahan DB se naam fetch kar rahe hain
+    for entry in results:
+        user_info = await db.users.find_one({"user_id": entry["_id"]})
+        entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
+        
+    return results
