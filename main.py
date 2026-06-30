@@ -3,6 +3,7 @@ import asyncio
 from telethon import TelegramClient, events, types, Button
 from telethon.tl.functions.bots import SetBotCommandsRequest
 from database import can_craft, add_craft_point, db, get_recipe
+from leaderboard import get_lb_markup, fetch_leaderboard_data
 from config import (
     API_ID, API_HASH, BOT_TOKEN, BOT_USERNAME,
     OFFICIAL_GC_ID, LOG_GC_ID, OWNER_ID,
@@ -17,7 +18,7 @@ from config import (
 )
 # Admin imports
 from admin import (
-    sudohelp, addsudo, power_callback, coins_cmd, 
+    is_admin, sudohelp, addsudo, power_callback, coins_cmd, 
     ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem
 )
 
@@ -395,6 +396,49 @@ async def craft_handler(event):
         await event.reply(f"✨ **Crafted:** {result_name_emoji}\nTotal Points: +{CRAFT_POINTS} | Coins: +{CRAFT_COINS}")
     else:
         await event.reply(NOTHING_MSG)
+
+@client.on(events.NewMessage(pattern=r'(?i)/(lb|leaderboard)'))
+async def lb_cmd(event):
+    if await check_maintenance(event): return
+    
+    # Default initial state: Global, Most Points, Today
+    initial_mode = "global_points_today"
+    
+    # Data fetch karo
+    data = await fetch_leaderboard_data(initial_mode, chat_id=event.chat_id if event.is_group else None)
+    
+    # Message format karo
+    text = "🏆 **Alchemist Leaderboard (Today)**\n\n"
+    for i, user in enumerate(data, 1):
+        text += f"{i}. User ID: `{user['_id']}` - {user['total']} pts\n"
+        
+    btns = await get_lb_markup(initial_mode)
+    await event.reply(text, buttons=btns)
+
+@client.on(events.CallbackQuery(pattern=b"lb_|refresh_"))
+async def lb_callback(event):
+    data = event.data.decode()
+    
+    # Agar refresh button click hua, toh wahi mode wapas use karo
+    if data.startswith("refresh_"):
+        mode = data.replace("refresh_", "")
+    else:
+        mode = data.replace("lb_", "")
+        
+    # Data fetch karo
+    chat_id = event.chat_id if "chat" in mode else None
+    leaderboard_data = await fetch_leaderboard_data(mode, chat_id=chat_id)
+    
+    # Message update karo
+    text = f"🏆 **Alchemist Leaderboard ({mode.split('_')[2].upper()})**\n\n"
+    for i, user in enumerate(leaderboard_data, 1):
+        text += f"{i}. User ID: `{user['_id']}` - {user['total']} pts\n"
+    
+    # Buttons update karo
+    btns = await get_lb_markup(mode)
+    
+    await event.edit(text, buttons=btns)
+    await event.answer("✅ Updated!")
 
 async def main():
     await client.start(bot_token=BOT_TOKEN)
