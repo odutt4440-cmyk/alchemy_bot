@@ -352,6 +352,7 @@ async def craft_handler(event):
         return
 
     raw_text = event.pattern_match.group(2).strip()
+    uid = event.sender_id
     
     if not user:
         if event.is_group:
