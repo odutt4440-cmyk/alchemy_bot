@@ -416,22 +416,26 @@ async def lb_cmd(event):
 async def lb_callback(event):
     data = event.data.decode()
     mode = data.replace("refresh_", "").replace("lb_", "")
-        
+    
     chat_id = event.chat_id if "chat" in mode else None
     leaderboard_data = await fetch_leaderboard_data(mode, chat_id=chat_id)
     
-    # Mode split karke time frame nikal lo
-    time_frame = mode.split('_')[2].upper()
-    text = f"🏆 **Alchemist Leaderboard ({time_frame})**\n\n"
+    parts = mode.split('_')
+    text = f"🏆 **Alchemist Leaderboard ({parts[0].upper()} - {parts[2].upper()})**\n\n"
     
     for i, user in enumerate(leaderboard_data, 1):
-        # Agar 'all' time data hai toh 'points' ya 'crafted_count' handle karo, 
-        # aur agar 'total' key missing hai toh 0 dikhao.
-        val = user.get('total') or user.get('points') or user.get('crafted_count') or 0
-        text += f"{i}. User ID: `{user['_id']}` - {val} pts\n"
+        u_id = user['_id']
+        # Name fetch logic
+        try:
+            user_obj = await client.get_entity(int(u_id))
+            name = user_obj.first_name
+        except:
+            name = f"User {str(u_id)[-4:]}"
+            
+        val = user.get('total', 0)
+        text += f"{i}. {name} — {val} {'pts' if 'points' in mode else 'crafts'}\n"
     
     btns = await get_lb_markup(mode)
-    
     await event.edit(text, buttons=btns)
     await event.answer("✅ Updated!")
 
