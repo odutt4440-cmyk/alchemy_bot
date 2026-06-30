@@ -19,7 +19,7 @@ from config import (
 # Admin imports
 from admin import (
     is_admin, sudohelp, addsudo, power_callback, coins_cmd, 
-    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem
+    ban_unban, broadcast_init, bc_callback, stats, info, maintenance_mode , give_redeem, inspect_toggle, send_captcha, inspection_mode
 )
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
@@ -323,6 +323,22 @@ async def craft_empty_handler(event):
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s+(.*)'))
 async def craft_handler(event):
     if await check_maintenance(event): return
+    if inspection_mode.get(event.sender_id, False):
+        user = await db.users.find_one({"user_id": event.sender_id})
+        last_time = user.get("last_craft_time")
+        
+        # Simple Logic: Agar craft time bahut tight hai (e.g., < 1.8s), flag it
+        import datetime
+        if last_time and (datetime.datetime.now() - last_time).total_seconds() < 1.8:
+            await client.send_message(LOG_GC_ID, f"🕵️ **Forensic Alert:** User `{event.sender_id}` is under inspection.\nAnalysis: **Suspiciously rapid timing detected!**")
+
+    # 2. Captcha Trap (If Captcha is pending)
+    user = await db.users.find_one({"user_id": event.sender_id})
+    if user and user.get("is_verifying"):
+        # Log evidence to GC
+        await client.send_message(LOG_GC_ID, f"🚨 **Busted!** User `{event.sender_id}` attempted `/craft` command even after captcha was sent.\nEvidence: **Script activity confirmed.**")
+        await event.reply("🚫 **Access Blocked!**\nAdmin has sent a verification captcha to your DM. Check it! Using commands now confirms you are using a script.")
+        return
     text = event.pattern_match.group(2)
     args = text.split()
     
@@ -440,6 +456,22 @@ async def lb_callback(event):
     await event.edit(text, buttons=btns)
     await event.answer("✅ Updated!")
 
+@client.on(events.NewMessage(func=lambda e: e.is_private))
+async def verify_handler(event):
+    user = await db.users.find_one({"user_id": event.sender_id})
+    if user and user.get("is_verifying"):
+        sent_code = user.get("captcha_code")
+        user_reply = event.text.strip()
+        
+        # Log evidence: Admin ne kya bheja aur User ne kya type kiya
+        await client.send_message(LOG_GC_ID, f"📝 **Captcha Evidence**\nUser: `{event.sender_id}`\nSent Code: `{sent_code}`\nUser Replied: `{user_reply}`")
+        
+        if user_reply == sent_code:
+            await db.users.update_one({"user_id": event.sender_id}, {"$set": {"is_verifying": False, "captcha_code": None}})
+            await event.reply("✅ **Verified.** You are now cleared.")
+        else:
+            await event.reply("❌ **Invalid code!** Admin will be notified of this attempt.")
+
 async def main():
     await client.start(bot_token=BOT_TOKEN)
     await set_commands()
@@ -468,6 +500,8 @@ async def main():
     client.add_event_handler(info)
     client.add_event_handler(maintenance_mode)
     client.add_event_handler(give_redeem)
+    client.add_event_handler(inspect_toggle)
+    client.add_event_handler(send_captcha)
     
     print("Bot is running with Admin & Maintenance support!")
     await client.run_until_disconnected()
