@@ -500,7 +500,7 @@ async def main():
     client.add_event_handler(info)
     client.add_event_handler(maintenance_mode)
     client.add_event_handler(give_redeem)
-    client.add_event_handler(inspect_toggle)
+    client.add_event_handler(inspect_user)
     client.add_event_handler(send_captcha)
     
     print("Bot is running with Admin & Maintenance support!")
