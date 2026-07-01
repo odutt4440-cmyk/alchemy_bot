@@ -394,26 +394,27 @@ async def craft_handler(event):
     # Splitting logic
     parts = raw_text.replace("+", " ").split()
     item1, item2 = None, None
-    missing_item = None
+    missing_item = None 
 
     for i in range(1, len(parts)):
         cand1 = match_item(" ".join(parts[:i]), inventory)
         cand2 = match_item(" ".join(parts[i:]), inventory)
+        
         if cand1 and cand2:
             item1, item2 = cand1, cand2
             break
+        else:
+            # Agar nahi mila, toh check karo kaunsa missing hai
+            # Sirf tab update karo jab humein specific pata chale
+            if not cand1: missing_item = " ".join(parts[:i])
+            elif not cand2: missing_item = " ".join(parts[i:])
 
+    # Debug line (as you wanted)
     print(f"DEBUG [User: {uid}]: Input: {raw_text} | Inventory Size: {len(inventory)}")
             
     if not item1 or not item2:
-        # Professional English quote with the error message
-        error_quote = "The path of the alchemist is paved with the unknown. Seek deeper into your collection to find what is missing."
-        await event.reply(
-            f"❌ **Not in Inventory!**\n\n"
-            f"Element `{missing_item or raw_text}` is not found in your inventory.\n\n"
-            f"_{error_quote}_\n\n"
-            f"Use /inventory to check your collected elements."
-        )
+        # Ek line ka compact reply
+        await event.reply(f"❌ **Not in Inventory:** `{missing_item or raw_text}` is missing from your collection. 🧪")
         return
 
     print(f"DEBUG: Crafting: {item1} + {item2}")
