@@ -22,7 +22,7 @@ LOG_GC_ID = -1004235229716
 OWNER_ID = 6273928843
 # ===== POINTS & REWARDS SYSTEM =====
 CRAFT_POINTS = 10             # Points for leaderboard
-CRAFT_COINS = 2               # Coins for rewards
+CRAFT_COINS = 1               # Coins for rewards
 COOLDOWN_SECONDS = 5          # Craft ke beech ka wait time
 INITIAL_ITEMS = ["Fire 🔥", "Water 💦", "Earth 🌏", "Wind 💨"]
 
