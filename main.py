@@ -266,23 +266,31 @@ async def redeem_callback(event):
             print(f"Error sending log: {e}")
 
 
-@client.on(events.NewMessage(pattern=r'(?i)/inventory'))
+@client.on(events.NewMessage(pattern=r'(?i)/(inventory|inv)(\s+(.*))?'))
 async def inventory_handler(event):
     user_id = event.sender_id
-    # Pehle sirf total count lelo
-    user = await db.users.find_one({"user_id": user_id})
-    total_items = len(user.get("inventory", [])) if user else 0
+    # Letter catch karo
+    query = event.pattern_match.group(3)
     
-    # 0th page se shuru karo
-    await send_inventory_page(event, user_id, 0, total_items)
+    user = await db.users.find_one({"user_id": user_id})
+    full_inv = user.get("inventory", []) if user else []
+    
+    if query:
+        # Letter filter logic
+        filtered = [item for item in full_inv if item.lower().startswith(query.lower())]
+        if not filtered:
+            await event.reply(f"❌ No inventory found starting with letter '{query}'.")
+            return
+        await send_filtered_inventory(event, user_id, 0, len(filtered), filtered, query)
+    else:
+        # Default behavior (jo tumhara pehle tha)
+        await send_inventory_page(event, user_id, 0, len(full_inv))
 
 async def send_inventory_page(event, owner_id, page, total_count):
-    # MongoDB se slice uthao
     user_data = await db.users.find_one(
         {"user_id": owner_id},
         {"inventory": {"$slice": [page * ITEMS_PER_PAGE, ITEMS_PER_PAGE]}}
     )
-    
     items = user_data.get("inventory", []) if user_data else []
     display_text = ", ".join(items) if items else "No items found!"
     
@@ -290,43 +298,62 @@ async def send_inventory_page(event, owner_id, page, total_count):
             f"📄 Page {page + 1} / {max(1, (total_count - 1) // ITEMS_PER_PAGE + 1)}\n\n"
             f"{display_text}")
     
-    # Buttons logic
     buttons = []
     row = []
     if page > 0:
         row.append(Button.inline("◀️ Prev", data=f"inv_{owner_id}_{page-1}"))
     if (page + 1) * ITEMS_PER_PAGE < total_count:
         row.append(Button.inline("Next ▶️", data=f"inv_{owner_id}_{page+1}"))
+    if row: buttons.append(row)
     
-    if row:
-        buttons.append(row)
-    else:
-        buttons = None 
-
-    # ERROR FIX: Sirf NewMessage check karo, baki sab else mein jayega
     if isinstance(event, events.NewMessage.Event):
         await event.reply(text, buttons=buttons)
     else:
-        # Agar ye CallbackQuery event hai, toh edit karo
         await event.edit(text, buttons=buttons)
 
-# Callback Handler (Button click)
-@client.on(events.CallbackQuery(pattern=b"inv_"))
+# Filtered page ke liye naya function
+async def send_filtered_inventory(event, owner_id, page, total_count, items, letter):
+    start = page * ITEMS_PER_PAGE
+    display_items = items[start : start + ITEMS_PER_PAGE]
+    display_text = ", ".join(display_items)
+    
+    text = (f"🎒 **Collection ('{letter}'):** ({total_count} items)\n"
+            f"📄 Page {page + 1} / {max(1, (total_count - 1) // ITEMS_PER_PAGE + 1)}\n\n"
+            f"{display_text}")
+    
+    buttons = []
+    row = []
+    if page > 0:
+        row.append(Button.inline("◀️ Prev", data=f"invf_{owner_id}_{page-1}_{letter}"))
+    if (page + 1) * ITEMS_PER_PAGE < total_count:
+        row.append(Button.inline("Next ▶️", data=f"invf_{owner_id}_{page+1}_{letter}"))
+    if row: buttons.append(row)
+    
+    if isinstance(event, events.NewMessage.Event):
+        await event.reply(text, buttons=buttons)
+    else:
+        await event.edit(text, buttons=buttons)
+
+@client.on(events.CallbackQuery(pattern=b"inv"))
 async def callback_handler(event):
     data = event.data.decode().split("_")
+    is_filtered = data[0] == "invf"
     owner_id = int(data[1])
     target_page = int(data[2])
     
-    # Security Check
     if event.sender_id != owner_id:
-        await event.answer("🚫 \"This is not your inventory, stay away!\"", alert=True)
+        await event.answer("🚫 This is not your inventory, stay away!", alert=True)
         return
     
-    # Count wapas fetch karo (agar items badhe hon toh)
     user = await db.users.find_one({"user_id": owner_id})
-    total_count = len(user.get("inventory", [])) if user else 0
+    full_inv = user.get("inventory", []) if user else []
     
-    await send_inventory_page(event, owner_id, target_page, total_count)
+    if is_filtered:
+        letter = data[3]
+        filtered = [item for item in full_inv if item.lower().startswith(letter.lower())]
+        await send_filtered_inventory(event, owner_id, target_page, len(filtered), filtered, letter)
+    else:
+        await send_inventory_page(event, owner_id, target_page, len(full_inv))
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s*$'))
 async def craft_empty_handler(event):
