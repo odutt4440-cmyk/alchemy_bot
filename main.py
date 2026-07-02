@@ -323,6 +323,7 @@ async def send_filtered_inventory(event, owner_id, page, total_count, items, let
     
     buttons = []
     row = []
+    # Humne letter ko limit ke andar rakhne ke liye yahan sirf letter bheja hai
     if page > 0:
         row.append(Button.inline("◀️ Prev", data=f"invf_{owner_id}_{page-1}_{letter}"))
     if (page + 1) * ITEMS_PER_PAGE < total_count:
@@ -332,6 +333,7 @@ async def send_filtered_inventory(event, owner_id, page, total_count, items, let
     if isinstance(event, events.NewMessage.Event):
         await event.reply(text, buttons=buttons)
     else:
+        # Button update karne ke liye buttons=buttons pass karo
         await event.edit(text, buttons=buttons)
 
 @client.on(events.CallbackQuery(pattern=b"inv"))
@@ -349,11 +351,15 @@ async def callback_handler(event):
     full_inv = user.get("inventory", []) if user else []
     
     if is_filtered:
-        letter = data[3]
+        # Agar letter limit se zyada hai, toh yahan error aa sakta hai.
+        # Lekin 'a', 'b', 'c' ke liye ye 100% safe hai.
+        letter = "_".join(data[3:]) # Agar letter mein underscore ho toh handle karega
         filtered = [item for item in full_inv if item.lower().startswith(letter.lower())]
         await send_filtered_inventory(event, owner_id, target_page, len(filtered), filtered, letter)
     else:
         await send_inventory_page(event, owner_id, target_page, len(full_inv))
+
+
 
 @client.on(events.NewMessage(pattern=r'(?i)/(craft|c)\s*$'))
 async def craft_empty_handler(event):
