@@ -294,18 +294,25 @@ async def send_inventory_page(event, owner_id, page, total_count):
     items = user_data.get("inventory", []) if user_data else []
     display_text = ", ".join(items) if items else "No items found!"
     
+    # FIX: Total pages ka logic safe banao
+    total_pages = max(1, (total_count + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE) if total_count > 0 else 1
+    current_page = page + 1
+    
     text = (f"🎒 **Your Collection ({total_count} items):**\n"
-            f"📄 Page {page + 1} / {max(1, (total_count - 1) // ITEMS_PER_PAGE + 1)}\n\n"
+            f"📄 Page {current_page} / {total_pages}\n\n"
             f"{display_text}")
     
-    buttons = []
+    # Buttons logic
+    buttons = None
     row = []
     if page > 0:
         row.append(Button.inline("◀️ Prev", data=f"inv_{owner_id}_{page-1}"))
     if (page + 1) * ITEMS_PER_PAGE < total_count:
         row.append(Button.inline("Next ▶️", data=f"inv_{owner_id}_{page+1}"))
-    if row: buttons.append(row)
     
+    if row:
+        buttons = [row]
+
     if isinstance(event, events.NewMessage.Event):
         await event.reply(text, buttons=buttons)
     else:
@@ -315,24 +322,25 @@ async def send_inventory_page(event, owner_id, page, total_count):
 async def send_filtered_inventory(event, owner_id, page, total_count, items, letter):
     start = page * ITEMS_PER_PAGE
     display_items = items[start : start + ITEMS_PER_PAGE]
-    display_text = ", ".join(display_items)
+    display_text = ", ".join(display_items) if display_items else "No items found!"
+    
+    # FIX: Yahan bhi same safe logic
+    total_pages = max(1, (total_count + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE) if total_count > 0 else 1
     
     text = (f"🎒 **Collection ('{letter}'):** ({total_count} items)\n"
-            f"📄 Page {page + 1} / {max(1, (total_count - 1) // ITEMS_PER_PAGE + 1)}\n\n"
+            f"📄 Page {page + 1} / {total_pages}\n\n"
             f"{display_text}")
     
-    # 1. Buttons ki list banao
+    buttons = None
     row = []
     if page > 0:
         row.append(Button.inline("◀️ Prev", data=f"invf_{owner_id}_{page-1}_{letter}"))
     if (page + 1) * ITEMS_PER_PAGE < total_count:
         row.append(Button.inline("Next ▶️", data=f"invf_{owner_id}_{page+1}_{letter}"))
     
-    # 2. Buttons variable ko sahi format mein set karo
-    # Agar row khali hai, toh buttons=None hi rahega, wrna [row]
-    buttons = [row] if row else None
+    if row:
+        buttons = [row]
     
-    # 3. Message bhejo/edit karo
     if isinstance(event, events.NewMessage.Event):
         await event.reply(text, buttons=buttons)
     else:
