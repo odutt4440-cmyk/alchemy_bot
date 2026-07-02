@@ -321,19 +321,21 @@ async def send_filtered_inventory(event, owner_id, page, total_count, items, let
             f"📄 Page {page + 1} / {max(1, (total_count - 1) // ITEMS_PER_PAGE + 1)}\n\n"
             f"{display_text}")
     
-    buttons = []
+    # 1. Buttons ki list banao
     row = []
-    # Humne letter ko limit ke andar rakhne ke liye yahan sirf letter bheja hai
     if page > 0:
         row.append(Button.inline("◀️ Prev", data=f"invf_{owner_id}_{page-1}_{letter}"))
     if (page + 1) * ITEMS_PER_PAGE < total_count:
         row.append(Button.inline("Next ▶️", data=f"invf_{owner_id}_{page+1}_{letter}"))
-    if row: buttons.append(row)
     
+    # 2. Buttons variable ko sahi format mein set karo
+    # Agar row khali hai, toh buttons=None hi rahega, wrna [row]
+    buttons = [row] if row else None
+    
+    # 3. Message bhejo/edit karo
     if isinstance(event, events.NewMessage.Event):
         await event.reply(text, buttons=buttons)
     else:
-        # Button update karne ke liye buttons=buttons pass karo
         await event.edit(text, buttons=buttons)
 
 @client.on(events.CallbackQuery(pattern=b"inv"))
