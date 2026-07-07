@@ -102,6 +102,14 @@ async def welcome_handler(event):
                     await client.send_message(event.chat_id, msg)
                 return
 
+            if int(event.chat_id) == int(OFFICIAL_GC_ID):
+                for user in event.users:
+                    # Sirf Official GC mein welcome message
+                    if os.path.exists(START_IMAGE):
+                        await client.send_file(event.chat_id, START_IMAGE, caption=OFFICIAL_WELCOME_MSG)
+                    else:
+                        await client.send_message(event.chat_id, OFFICIAL_WELCOME_MSG)
+
         # 2. Left/Kick logic
         elif event.user_kicked or event.user_left:
             if any(u.id == me.id for u in event.users):
