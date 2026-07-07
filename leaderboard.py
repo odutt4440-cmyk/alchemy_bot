@@ -20,33 +20,33 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
     m = mode_str.split('_')
     scope, category, time_frame = m[0], m[1], m[2]
     
-    # 1. AGAR "ALL TIME" HAI: Seedha db.users se uthao (Fastest)
-    if time_frame == "all":
-        field = "points" if category == "points" else "crafted_count"
-        # Sirf global support kar raha hoon (chat_id logic yahan zarurat nahi)
-        cursor = db.users.find({}).sort(field, -1).limit(10)
-        results = await cursor.to_list(length=10)
-        # Format map karo
-        return [{"_id": u["user_id"], "total": u.get(field, 0), "first_name": u.get("first_name", "Unknown")} for u in results]
-
-    # 2. AGAR "TODAY" HAI: craft_history use karo
-    else:
-        start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        match_stage = {"crafted_at": {"$gte": start_date}}
-        if scope == "chat" and chat_id:
-            match_stage["group_id"] = chat_id
+    # 1. Base Match Stage: Agar scope "chat" hai aur chat_id hai toh filter karo
+    match_stage = {}
+    if scope == "chat" and chat_id:
+        match_stage["group_id"] = chat_id
+    
+    # 2. Agar "Today" hai, toh sirf aaj ka filter add karo
+    if time_frame == "today":
+        start_date = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        match_stage["crafted_at"] = {"$gte": start_date}
             
-        pipeline = [
-            {"$match": match_stage},
-            {"$group": {"_id": "$user_id", "total": {"$sum": "$points" if category == "points" else 1}}},
-            {"$sort": {"total": -1}},
-            {"$limit": 10}
-        ]
-        results = await db.craft_history.aggregate(pipeline).to_list(length=10)
+    # 3. Pipeline: Ab ye All-Time aur Today dono ke liye generic hai
+    # Agar All-Time hai, toh sirf match_stage (group_id) use hoga, date nahi
+    pipeline = [
+        {"$match": match_stage},
+        {"$group": {
+            "_id": "$user_id", 
+            "total": {"$sum": "$points" if category == "points" else 1}
+        }},
+        {"$sort": {"total": -1}},
+        {"$limit": 10}
+    ]
+    
+    results = await db.craft_history.aggregate(pipeline).to_list(length=10)
         
-        # Naam attach karo (Lookup optimization)
-        for entry in results:
-            user_info = await db.users.find_one({"user_id": entry["_id"]})
-            entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
+    # 4. Naam attach karo (Lookup optimization)
+    for entry in results:
+        user_info = await db.users.find_one({"user_id": entry["_id"]})
+        entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
             
-        return results
+    return results
