@@ -3,6 +3,7 @@ import asyncio
 from telethon import TelegramClient, events, types, Button
 from telethon.tl.functions.bots import SetBotCommandsRequest
 from database import can_craft, add_craft_point, db, get_recipe
+from referrals import process_referral, get_daily_coins
 from leaderboard import get_lb_markup, fetch_leaderboard_data
 from config import (
     API_ID, API_HASH, BOT_TOKEN, BOT_USERNAME,
@@ -23,7 +24,7 @@ from admin import (
 )
 
 client = TelegramClient('alchemy_bot', API_ID, API_HASH)
-ITEMS_PER_PAGE = 30
+ITEMS_PER_PAGE = 100
 # Maintenance check helper
 # main.py mein ye function replace kar do
 async def check_maintenance(event):
@@ -48,6 +49,8 @@ async def set_commands():
         types.BotCommand("points", "Check your current points"),
         types.BotCommand("inventory", "View your discovered elements"),
         types.BotCommand("leaderboard", "Check global/chat leaderboard"),
+        types.BotCommand("daily", "Claim your daily rewards"),  
+        types.BotCommand("refer", "Get your referral link"),
         types.BotCommand("redeem", "Redeem Rewards through this command"),
         types.BotCommand("help", "Get help and support")
     ]
@@ -133,9 +136,21 @@ async def group_tracker(event):
         )
 
 
-@client.on(events.NewMessage(pattern=r'(?i)/start'))
+from referrals import process_referral  # Ensure you import this
+
+@client.on(events.NewMessage(pattern=r'(?i)/start( ref_(.+))?'))
 async def start_handler(event):
     if await check_maintenance(event): return
+    
+    # 1. HAR BAAR LOG GC ME LOG BHEJO
+    sender = await event.get_sender()
+    user_name = f"{sender.first_name} {sender.last_name or ''}"
+    await client.send_message(
+        LOG_GC_ID,
+        f"👤 **Bot Started/Restarted**\nName: {user_name}\nID: `{event.sender_id}`\nIn Group: {event.is_group}"
+    )
+
+    # 2. Group Logic (Agar group mein start kiya hai)
     if event.is_group:
         if event.chat_id == OFFICIAL_GC_ID:
             await event.reply(START_MSG_OFFICIAL_GC)
@@ -143,6 +158,19 @@ async def start_handler(event):
             await event.reply(START_MSG_OTHER_GROUP)
         return
     
+    # 3. DM Logic (Referral Processing)
+    args = event.pattern_match.group(2)
+    if args:
+        try:
+            referrer_id = int(args)
+            if referrer_id != event.sender_id:
+                res = await process_referral(referrer_id, event.sender_id)
+                if res.get("reward"):
+                    await client.send_message(referrer_id, "🎉 **5 Referrals Completed!**\n10 coins bonused to your account.")
+        except:
+            pass
+
+    # 4. User registration (Agar naya user hai)
     user = await db.users.find_one({"user_id": event.sender_id})
     if not user:
         await db.users.insert_one({
@@ -151,17 +179,11 @@ async def start_handler(event):
             "coins": 0,
             "crafted_count": 0,
             "last_craft_time": None,
+            "refer_count": 0, # Refer tracker
             "inventory": INITIAL_ITEMS
         })
-        sender = await event.get_sender()
-        user_name = f"{sender.first_name} {sender.last_name or ''}"
-        await client.send_message(
-            LOG_GC_ID,
-            f"👤 **New User Started Bot**\n"
-            f"Name: {user_name}\n"
-            f"ID: `{event.sender_id}`"
-        )
     
+    # 5. Welcome Buttons
     buttons = [
         [Button.url("👨‍💻 Developer", DEV_URL)],
         [Button.url("❓ Help", HELP_URL), Button.url("💬 Official GC", GC_URL)],
@@ -171,8 +193,6 @@ async def start_handler(event):
     file_path = START_IMAGE
     if os.path.exists(file_path):
         await client.send_file(event.sender_id, file_path, caption=START_MSG_DM, buttons=buttons)
-        if event.chat_id != event.sender_id:
-            await event.reply("✅ Check your DM!")
     else:
         await event.reply(START_MSG_DM, buttons=buttons)
 
@@ -545,6 +565,33 @@ async def verify_handler(event):
             await event.reply("✅ **Verified.** You are now cleared.")
         else:
             await event.reply("❌ **Invalid code!** Admin will be notified of this attempt.")
+
+@client.on(events.NewMessage(pattern="/refer"))
+async def refer_cmd(event):
+    bot_info = await client.get_me()
+    ref_link = f"https://t.me/{bot_info.username}?start=ref_{event.sender_id}"
+    
+    user = await db.users.find_one({"user_id": event.sender_id})
+    count = user.get("refer_count", 0)
+    
+    msg = f"🔗 **Your Referral Link:**\n`{ref_link}`\n\n👥 **Progress:** {count}/5\nInvite 5 users to get 10 coins!"
+    await event.reply(msg, buttons=[[Button.url("Share Link", f"https://t.me/share/url?url={ref_link}")]])
+
+@client.on(events.NewMessage(pattern="/daily"))
+async def daily_cmd(event):
+    user = await db.users.find_one({"user_id": event.sender_id})
+    now = datetime.utcnow()
+    last_daily = user.get("last_daily_time")
+    
+    if last_daily and (now - last_daily).total_seconds() < 86400:
+        remaining = 86400 - (now - last_daily).total_seconds()
+        await event.reply(f"❌ Claimed! Back in {int(remaining/3600)}h {int((remaining%3600)/60)}m")
+        return
+
+    coins = await get_daily_coins()
+    await db.users.update_one({"user_id": event.sender_id}, {"$set": {"last_daily_time": now}, "$inc": {"coins": coins}})
+    await event.reply(f"🎁 **Daily Gift:** You received `{coins}` coins!")
+
 
 async def main():
     await client.start(bot_token=BOT_TOKEN)
