@@ -17,21 +17,24 @@ async def get_lb_markup(current_mode):
     ]
 
 async def fetch_leaderboard_data(mode_str, chat_id=None):
+    # Split mode: global/chat, craft/points, today/all
     m = mode_str.split('_')
     scope, category, time_frame = m[0], m[1], m[2]
     
-    # 1. Base Match Stage: Agar scope "chat" hai aur chat_id hai toh filter karo
+    # 1. Base Match Stage
     match_stage = {}
+    
+    # Scope filter (This Chat vs Global)
     if scope == "chat" and chat_id:
         match_stage["group_id"] = chat_id
     
-    # 2. Agar "Today" hai, toh sirf aaj ka filter add karo
+    # 2. Time Filter (Today vs All)
     if time_frame == "today":
+        # Aaj ki shuruat se lekar abhi tak ka data
         start_date = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         match_stage["crafted_at"] = {"$gte": start_date}
             
-    # 3. Pipeline: Ab ye All-Time aur Today dono ke liye generic hai
-    # Agar All-Time hai, toh sirf match_stage (group_id) use hoga, date nahi
+    # 3. Pipeline
     pipeline = [
         {"$match": match_stage},
         {"$group": {
@@ -42,9 +45,14 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
         {"$limit": 10}
     ]
     
-    results = await db.craft_history.aggregate(pipeline).to_list(length=10)
+    # 4. Aggregate query execute karo
+    try:
+        results = await db.craft_history.aggregate(pipeline).to_list(length=10)
+    except Exception as e:
+        print(f"Leaderboard aggregation error: {e}")
+        return []
         
-    # 4. Naam attach karo (Lookup optimization)
+    # 5. Naam attach karo (Lookup optimization)
     for entry in results:
         user_info = await db.users.find_one({"user_id": entry["_id"]})
         entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
