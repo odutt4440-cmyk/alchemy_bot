@@ -2,3 +2,4 @@ telethon
 motor
 google-generativeai
 python-dotenv
+psutil
