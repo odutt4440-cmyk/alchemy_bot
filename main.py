@@ -4,6 +4,7 @@ from datetime import datetime
 from telethon import TelegramClient, events, types, Button
 from telethon.tl.functions.bots import SetBotCommandsRequest
 from database import can_craft, add_craft_point, db, get_recipe
+from notifications import send_smart_notifications
 from referrals import process_referral, get_daily_coins
 from leaderboard import get_lb_markup, fetch_leaderboard_data
 from config import (
@@ -136,8 +137,6 @@ async def group_tracker(event):
             upsert=True
         )
 
-
-from referrals import process_referral  # Ensure you import this
 
 @client.on(events.NewMessage(pattern=r'(?i)/start( ref_(.+))?'))
 async def start_handler(event):
@@ -596,6 +595,7 @@ async def daily_cmd(event):
 
 async def main():
     await client.start(bot_token=BOT_TOKEN)
+    asyncio.create_task(send_smart_notifications(client))
     await set_commands()
     
     # 📢 Bot Start Notification
