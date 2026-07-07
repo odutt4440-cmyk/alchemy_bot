@@ -521,7 +521,13 @@ async def lb_callback(event):
             text += f"{i}. {name} — {val} {unit}\n"
     
     btns = await get_lb_markup(mode)
-    await event.edit(text, buttons=btns)
+    
+    try:
+        await event.edit(text, buttons=btns)
+    except telethon.errors.MessageNotModifiedError:
+        await event.answer("Nothing to update!")
+        return
+        
     await event.answer("✅ Updated!")
 
 @client.on(events.NewMessage(func=lambda e: e.is_private))
