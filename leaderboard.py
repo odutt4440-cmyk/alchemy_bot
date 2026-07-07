@@ -1,6 +1,6 @@
 from telethon import Button
 from database import db
-from datetime import datetime
+from datetime import datetime  # Ye line tumhare file mein hogi hi
 
 async def get_lb_markup(current_mode):
     # Mode: "global_points_today"
@@ -30,8 +30,8 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
     
     # 2. Time Filter (Today vs All)
     if time_frame == "today":
-        # Aaj ki shuruat se lekar abhi tak ka data
-        start_date = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Yahan fix dekho: datetime.utcnow() use kiya hai
+        start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         match_stage["crafted_at"] = {"$gte": start_date}
             
     # 3. Pipeline
