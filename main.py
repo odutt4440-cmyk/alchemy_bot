@@ -60,12 +60,14 @@ async def set_commands():
 @client.on(events.ChatAction)
 async def welcome_handler(event):
     try:
+        # Check agar action kisi group mein hua hai
         if not event.is_group: return
+        
+        me = await client.get_me()
         
         # 1. Bot add/join check
         if event.user_added or event.user_joined:
-            # event.users mein wo sabhi users hote hain jo add/join huye hain
-            me = await client.get_me()
+            # Check karo kya bot khud add hua hai
             if any(u.id == me.id for u in event.users):
                 
                 chat = await event.get_chat()
@@ -79,9 +81,16 @@ async def welcome_handler(event):
 
                 # Log to LOG_GC
                 chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
-                adder = await event.get_sender()
-                adder_name = f"{adder.first_name} {adder.last_name or ''}".strip()
                 
+                # Yahan sender nikalne ka sahi tarika:
+                adder = await event.get_input_sender() 
+                # Agar sender pata chala toh uska naam nikalenge
+                try:
+                    adder_entity = await client.get_entity(adder)
+                    adder_name = f"{adder_entity.first_name} {adder_entity.last_name or ''}".strip()
+                except:
+                    adder_name = "Unknown"
+
                 await client.send_message(
                     LOG_GC_ID, 
                     f"🤖 **Bot Added to Group**\n\n"
@@ -91,17 +100,15 @@ async def welcome_handler(event):
                     f"👤 **Added By:** {adder_name}"
                 )
                 
-                # Welcome message
+                # Welcome Message
                 msg = OFFICIAL_WELCOME_MSG if int(event.chat_id) == int(OFFICIAL_GC_ID) else OTHER_GROUP_MSG
                 if os.path.exists(START_IMAGE):
                     await client.send_file(event.chat_id, START_IMAGE, caption=msg)
                 else:
                     await client.send_message(event.chat_id, msg)
-                return
 
         # 2. Left/Kick logic
         elif event.user_kicked or event.user_left:
-            me = await client.get_me()
             if any(u.id == me.id for u in event.users):
                 await db.groups.update_one({"id": event.chat_id}, {"$set": {"active": False}})
 
