@@ -59,63 +59,50 @@ async def set_commands():
 
 @client.on(events.ChatAction)
 async def welcome_handler(event):
-    """
-    Fixed: Proper group tracking, logging, and welcome msg.
-    Handles bot being added to a new group/channel.
-    """
     try:
-        me = await client.get_me()
+        if not event.is_group: return
         
-        # 1. Bot add/join logic
+        # 1. Bot add/join check
         if event.user_added or event.user_joined:
-            # event.action_message.users se verify karo ki kya bot add hua hai
-            added_users = event.action_message.users if event.action_message else []
-            if any(u.id == me.id for u in added_users):
+            # event.users mein wo sabhi users hote hain jo add/join huye hain
+            me = await client.get_me()
+            if any(u.id == me.id for u in event.users):
+                
                 chat = await event.get_chat()
                 
-                # Check DB for active status
-                group_data = await db.groups.find_one({"id": event.chat_id})
-                is_new_add = not group_data or not group_data.get("active")
-
-                # Update Active status in DB
+                # Database update
                 await db.groups.update_one(
                     {"id": event.chat_id}, 
                     {"$set": {"active": True, "title": chat.title}}, 
                     upsert=True
                 )
 
-                # Log only if it's a fresh addition
-                if is_new_add:
-                    adder = await event.get_sender()
-                    adder_name = f"{adder.first_name} {adder.last_name or ''}".strip()
-                    adder_uname = f"@{adder.username}" if adder.username else "None"
-                    
-                    # Group link format (Handling private vs public groups)
-                    chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
-
-                    await client.send_message(
-                        LOG_GC_ID, 
-                        f"🤖 **Bot Added to Group**\n\n"
-                        f"🏢 **Group:** {chat.title}\n"
-                        f"🆔 **GC ID:** `{event.chat_id}`\n"
-                        f"🔗 **Link:** {chat_link}\n\n"
-                        f"👤 **Added By:** {adder_name}\n"
-                        f"📛 **Username:** `{adder_uname}`\n"
-                        f"🆔 **User ID:** `{adder.id}`"
-                    )
+                # Log to LOG_GC
+                chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
+                adder = await event.get_sender()
+                adder_name = f"{adder.first_name} {adder.last_name or ''}".strip()
                 
-                # Welcome Message Logic
+                await client.send_message(
+                    LOG_GC_ID, 
+                    f"🤖 **Bot Added to Group**\n\n"
+                    f"🏢 **Group:** {chat.title}\n"
+                    f"🆔 **GC ID:** `{event.chat_id}`\n"
+                    f"🔗 **Link:** {chat_link}\n"
+                    f"👤 **Added By:** {adder_name}"
+                )
+                
+                # Welcome message
                 msg = OFFICIAL_WELCOME_MSG if int(event.chat_id) == int(OFFICIAL_GC_ID) else OTHER_GROUP_MSG
-                
                 if os.path.exists(START_IMAGE):
                     await client.send_file(event.chat_id, START_IMAGE, caption=msg)
                 else:
                     await client.send_message(event.chat_id, msg)
+                return
 
-        # 2. Bot kicked/left logic
+        # 2. Left/Kick logic
         elif event.user_kicked or event.user_left:
-            # Check if the bot was the one who left/kicked
-            if event.user_id == me.id or any(u.id == me.id for u in (event.action_message.users if event.action_message else [])):
+            me = await client.get_me()
+            if any(u.id == me.id for u in event.users):
                 await db.groups.update_one({"id": event.chat_id}, {"$set": {"active": False}})
 
     except Exception as e:
