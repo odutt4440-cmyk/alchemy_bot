@@ -60,19 +60,19 @@ async def set_commands():
 @client.on(events.ChatAction)
 async def welcome_handler(event):
     try:
-        # Check agar action kisi group mein hua hai
+        # Sirf groups ke liye
         if not event.is_group: return
         
         me = await client.get_me()
         
-        # 1. Bot add/join check
+        # 1. Bot add/join logic
         if event.user_added or event.user_joined:
-            # Check karo kya bot khud add hua hai
+            # Check karo kya bot add hua hai
             if any(u.id == me.id for u in event.users):
                 
                 chat = await event.get_chat()
                 
-                # Database update
+                # DB Update
                 await db.groups.update_one(
                     {"id": event.chat_id}, 
                     {"$set": {"active": True, "title": chat.title}}, 
@@ -80,16 +80,10 @@ async def welcome_handler(event):
                 )
 
                 # Log to LOG_GC
-                chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
+                # event.action_message.sender_id ye sabse safe way hai sender nikalne ka
+                sender_id = event.action_message.sender_id if event.action_message else "Unknown"
                 
-                # Yahan sender nikalne ka sahi tarika:
-                adder = await event.get_input_sender() 
-                # Agar sender pata chala toh uska naam nikalenge
-                try:
-                    adder_entity = await client.get_entity(adder)
-                    adder_name = f"{adder_entity.first_name} {adder_entity.last_name or ''}".strip()
-                except:
-                    adder_name = "Unknown"
+                chat_link = f"https://t.me/c/{str(event.chat_id).replace('-100', '')}" if event.chat_id < 0 else "N/A"
 
                 await client.send_message(
                     LOG_GC_ID, 
@@ -97,7 +91,7 @@ async def welcome_handler(event):
                     f"🏢 **Group:** {chat.title}\n"
                     f"🆔 **GC ID:** `{event.chat_id}`\n"
                     f"🔗 **Link:** {chat_link}\n"
-                    f"👤 **Added By:** {adder_name}"
+                    f"👤 **Added By ID:** `{sender_id}`"
                 )
                 
                 # Welcome Message
@@ -106,6 +100,7 @@ async def welcome_handler(event):
                     await client.send_file(event.chat_id, START_IMAGE, caption=msg)
                 else:
                     await client.send_message(event.chat_id, msg)
+                return
 
         # 2. Left/Kick logic
         elif event.user_kicked or event.user_left:
@@ -113,6 +108,9 @@ async def welcome_handler(event):
                 await db.groups.update_one({"id": event.chat_id}, {"$set": {"active": False}})
 
     except Exception as e:
+        # Error print karo taaki hume pata chale exact line kya hai
+        import traceback
+        traceback.print_exc()
         print(f"Welcome handler error: {e}")
 
 @client.on(events.NewMessage)
