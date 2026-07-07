@@ -16,7 +16,7 @@ async def send_smart_notifications(client):
                 if not last_daily or (now - last_daily) >= timedelta(hours=24):
                     await client.send_message(
                         uid, 
-                        "⏰ **Claim your Daily Reward!**\nIncrease your coins to redeem exciting gifts using /redeem."
+                        "⏰ **Claim your Daily Reward! /daily**\nIncrease your coins to redeem exciting gifts using /redeem."
                     )
                 
                 # 2. REFERRAL REMINDER (Har 6 ghante mein ye msg jayega)
