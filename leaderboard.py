@@ -20,41 +20,56 @@ async def fetch_leaderboard_data(mode_str, chat_id=None):
     # Split mode: global/chat, craft/points, today/all
     m = mode_str.split('_')
     scope, category, time_frame = m[0], m[1], m[2]
-    
-    # 1. Base Match Stage
-    match_stage = {}
-    
-    # Scope filter (This Chat vs Global)
-    if scope == "chat" and chat_id:
-        match_stage["group_id"] = chat_id
-    
-    # 2. Time Filter (Today vs All)
-    if time_frame == "today":
-        # Yahan fix dekho: datetime.utcnow() use kiya hai
-        start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        match_stage["crafted_at"] = {"$gte": start_date}
-            
-    # 3. Pipeline
-    pipeline = [
-        {"$match": match_stage},
-        {"$group": {
-            "_id": "$user_id", 
-            "total": {"$sum": "$points" if category == "points" else 1}
-        }},
-        {"$sort": {"total": -1}},
-        {"$limit": 10}
-    ]
-    
-    # 4. Aggregate query execute karo
-    try:
-        results = await db.craft_history.aggregate(pipeline).to_list(length=10)
-    except Exception as e:
-        print(f"Leaderboard aggregation error: {e}")
-        return []
+
+    # --- CASE 1: GLOBAL ALL-TIME (Source: db.users) ---
+    if scope == "global" and time_frame == "all":
+        sort_field = "points" if category == "points" else "crafted_count"
+        # Users collection se directly fetch karo
+        cursor = db.users.find({}).sort(sort_field, -1).limit(10)
+        results = await cursor.to_list(length=10)
         
-    # 5. Naam attach karo (Lookup optimization)
-    for entry in results:
-        user_info = await db.users.find_one({"user_id": entry["_id"]})
-        entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
+        # Format match karne ke liye process karo
+        formatted = []
+        for user in results:
+            formatted.append({
+                "_id": user.get("user_id"),
+                "total": user.get(sort_field, 0),
+                "first_name": user.get("first_name", "Unknown")
+            })
+        return formatted
+
+    # --- CASE 2: THIS CHAT OR TODAY (Source: db.craft_history) ---
+    else:
+        match_stage = {}
+        
+        # Agar scope chat hai toh filter lagao
+        if scope == "chat" and chat_id:
+            match_stage["group_id"] = chat_id
             
-    return results
+        # Agar time_frame today hai toh date filter lagao
+        if time_frame == "today":
+            start_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            match_stage["crafted_at"] = {"$gte": start_date}
+            
+        pipeline = [
+            {"$match": match_stage},
+            {"$group": {
+                "_id": "$user_id", 
+                "total": {"$sum": "$points" if category == "points" else 1}
+            }},
+            {"$sort": {"total": -1}},
+            {"$limit": 10}
+        ]
+        
+        try:
+            results = await db.craft_history.aggregate(pipeline).to_list(length=10)
+        except Exception as e:
+            print(f"Leaderboard aggregation error: {e}")
+            return []
+            
+        # Name lookup
+        for entry in results:
+            user_info = await db.users.find_one({"user_id": entry["_id"]})
+            entry["first_name"] = user_info.get("first_name", "Unknown") if user_info else "Unknown"
+            
+        return results
