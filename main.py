@@ -544,10 +544,13 @@ async def lb_callback(event):
     
     try:
         await event.edit(text, buttons=btns)
-    except telethon.errors.MessageNotModifiedError:
-        await event.answer("Nothing to update!")
-        return
-        
+    except Exception as e:
+        # Check karo agar error 'MessageNotModified' hai
+        if "MessageNotModified" in str(e):
+            await event.answer("Nothing to update!")
+        else:
+            print(f"Leaderboard callback error: {e}")
+            
     await event.answer("✅ Updated!")
 
 @client.on(events.NewMessage(func=lambda e: e.is_private))
